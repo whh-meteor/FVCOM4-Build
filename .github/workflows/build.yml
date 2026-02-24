@@ -30,9 +30,16 @@ jobs:
         shell: msys2 {0}
         run: |
           cd FVCOM/src
-          # 1. 修正 Makefile 中的反斜杠命令冲突
+          
+          # 1. 修正 Makefile
           sed -i 's/\\rm/rm -f/g' makefile
-          # 2. 编译
+          
+          # 2. 尝试先编译 julian 库（如果它有自己的 Makefile）
+          if [ -d "../libs/julian" ]; then
+            cd ../libs/julian && mingw32-make && cd ../../src
+          fi
+          
+          # 3. 编译主程序
           mingw32-make clean
           mingw32-make
 
