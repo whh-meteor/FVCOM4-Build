@@ -31,11 +31,10 @@ jobs:
         run: |
           cd FVCOM/src
           
-          # 1. 解压所有内部依赖库
+          # 1. 解压内部库
           echo "Unpacking internal libraries..."
           chmod +x libs/untar.sh
           cd libs
-          # 调用你的脚本解压
           ./untar.sh julian
           ./untar.sh metis
           ./untar.sh netcdf
@@ -43,22 +42,37 @@ jobs:
           ./untar.sh fproj
           cd ..
           
-          # 2. 编译 Julian 库 (必须在主程序之前生成 libjulian.a)
+          # 2. 编译 Julian 库 (关键修复点)
           echo "Compiling Julian library..."
           cd libs/julian
+          # 替换编译器
           sed -i 's/cc = icc/cc = gcc/g' Makefile || true
           sed -i 's/fc = ifort/fc = gfortran/g' Makefile || true
-          # 强制指定在 MSYS2 下编译
-          mingw32-make
+          
+          # 【修复 ar 报错】: 将类似 "ar -j libjulian.a" 替换为标准命令 "ar rv libjulian.a"
+          # 同时也处理可能存在的 "ar j" 格式
+          sed -i 's/ar -j/ar rv/g' Makefile || true
+          sed -i 's/ar j/ar rv/g' Makefile || true
+          
+          # 再次编译，忽略旧代码的 C 警告
+          mingw32-make CFLAGS="-O3 -w" FFLAGS="-O3 -w"
+          
+          # 确认 .a 文件是否成功生成
+          if [ -f libjulian.a ]; then
+            echo "Successfully built libjulian.a"
+          else
+            echo "Failed to build libjulian.a"
+            ls -l  # 打印当前目录文件，方便查错
+            exit 1
+          fi
           cd ../..
           
-          # 3. 修正 Windows 命令兼容性补丁
+          # 3. 修正主程序 Makefile 兼容性
           sed -i 's/\\rm/rm -f/g' makefile
           
-          # 4. 执行主编译
+          # 4. 执行 FVCOM 主编译
           echo "Starting FVCOM compilation..."
           mingw32-make clean
-          # 注入搜索路径作为最终保险
           W_JUL_INC=$(cygpath -m "$(pwd)/libs/julian")
           mingw32-make FCFLAGS="-I$W_JUL_INC" FFLAGS="-I$W_JUL_INC"
 
