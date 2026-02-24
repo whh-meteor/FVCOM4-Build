@@ -32,7 +32,7 @@ jobs:
           # 你的结构是 FVCOM/src
           cd FVCOM/src
           mingw32-make clean
-          mingw32-make -j2
+          mingw32-make
 
       - name: Prepare Artifacts
         shell: bash
