@@ -43,13 +43,17 @@ jobs:
           sed -i 's/\\rm/rm -f/g' makefile
           sed -i 's/mod_prec.o : mod_prec.o//g' makefile
 
-          # 4. 【核心修复更新】：修正 gfortran 的动态格式语法
-          # 将 <ANY_VARIABLE>I10 替换为 *(I10)
-          echo "Fixing Intel Fortran extensions in all .F files..."
-          # 这一行处理类似 <...>I10 的情况
+          # 4. 【核心修复更新】：修正多种 Fortran 非标准语法
+          echo "Fixing non-standard Fortran syntax in all .F files..."
+          
+          # (a) 修正动态格式语法 <...>I10 -> *(I10)
           find . -name "*.F" -exec sed -i 's/<[^>]*>I10/*(I10)/g' {} +
-          # 这一行作为兜底，处理其他尖括号
           find . -name "*.F" -exec sed -i 's/<[^>]*>/*/g' {} +
+          
+          # (b) 修正 sinter.F 中的非法运算符 *= -> ==
+          # 增加空格匹配以防误伤，并针对性修复 sinter.F
+          sed -i 's/\*= /== /g' sinter.F
+          sed -i 's/\*=/==/g' sinter.F
 
           # 5. 编译库
           echo "Building libraries..."
@@ -63,8 +67,6 @@ jobs:
           echo "Starting FVCOM compilation..."
           LIB_BASE=$(cygpath -m "$(pwd)/libs")
           
-          # 显式传递路径和编译器参数
-          # 增加 -fno-range-check 以防某些常数溢出报错
           mingw32-make \
             FC="gfortran" \
             CC="gcc" \
