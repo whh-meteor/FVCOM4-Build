@@ -1,0 +1,72 @@
+name: FVCOM_Windows_Build
+
+on: 
+  push:             # 只要你提交代码到仓库，就会自动触发编译
+  workflow_dispatch: # 允许你在 GitHub 页面手动点击按钮触发
+
+jobs:
+  build_job:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 1. 安装 MSYS2 和 必要的编译器/库
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc-fortran
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-netcdf-fortran
+            mingw-w64-x86_64-msmpi
+
+      # 2. 安装微软官方 MPI 运行库 (编译链接需要)
+      - name: Install MS-MPI SDK
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri https://github.com/microsoft/Microsoft-MPI/releases/download/v12.0.1/msmpisetup.exe -OutFile msmpisetup.exe
+          Start-Process -FilePath .\msmpisetup.exe -ArgumentList "-s" -Wait
+
+      # 3. 编译依赖库 METIS
+      - name: Build METIS
+        shell: msys2 {0}
+        run: |
+          cd METIS_source
+          # 针对 gfortran 修正 Makefile
+          sed -i 's/cc = icc/cc = gcc/g' Makefile || true
+          make
+          echo "METIS Build complete"
+
+      # 4. 编译 FVCOM 主程序
+      - name: Build FVCOM
+        shell: msys2 {0}
+        run: |
+          cd FVCOM_source
+          # 使用刚才修改好的 make.inc 进行编译
+          mingw32-make clean
+          mingw32-make -j2
+
+      # 5. 自动搜集 exe 和它所有赖以生存的 dll 文件
+      - name: Prepare Artifacts
+        shell: bash
+        run: |
+          mkdir -p publish
+          cp FVCOM_source/fvcom.exe publish/
+          # 从 MSYS2 系统目录拷贝运行库
+          cp /mingw64/bin/libnetcdff-*.dll publish/
+          cp /mingw64/bin/libnetcdf-*.dll publish/
+          cp /mingw64/bin/libgfortran-*.dll publish/
+          cp /mingw64/bin/libquadmath-*.dll publish/
+          cp /mingw64/bin/libwinpthread-*.dll publish/
+          cp /mingw64/bin/libgcc_s_seh-*.dll publish/
+
+      # 6. 上传结果，供你下载
+      - name: Upload EXE Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: FVCOM4-Windows-Binaries
+          path: publish/
