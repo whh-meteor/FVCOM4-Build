@@ -1,11 +1,11 @@
 #===========================================================================
 # FVCOM v4.4.10 make.inc - Windows MSYS2/MinGW 适配版
-# 用于桌面软件集成与 GitHub Actions 编译
+# 专门优化用于 GitHub Actions (msys2 运行环境)
 #===========================================================================
 
 #========== TOPDIR ========================================================
-# TOPDIR 是源码所在的根目录。在 GitHub Actions 中，通常会自动识别。
-           TOPDIR        = $(shell pwd)/..
+# 使用相对路径最稳健，src 的上一层就是 FVCOM 根目录
+           TOPDIR        = ..
            INSTALLDIR    = $(TOPDIR)/libs/install
 
 #===========================================================================
@@ -16,7 +16,6 @@
 #===========================================================================
 # 环境路径设置 - 适配 MSYS2 Mingw64 标准路径
 #===========================================================================
-           # 这些变量会被后续的 IOLIBS, PARTLIBS 等引用
            LIBPATH       = /mingw64/lib
            INCLUDEPATH   = /mingw64/include
 
@@ -30,31 +29,31 @@
            DTINCS        = 
 
 #--------------------------------------------------------------------------
-# NETCDF 配置 (必须使用 NetCDF-Fortran)
+# NETCDF 配置 (针对 MSYS2 环境)
 #--------------------------------------------------------------------------
            IOLIBS        = -lnetcdff -lnetcdf
            IOINCS        = -I/mingw64/include
 
-#==========================================================================
-# 模型功能开关 (核心配置)
-#==========================================================================
+#--------------------------------------------------------------------------
+# MPI 配置 (Windows 专属补丁)
+# 原文件中可能没有 MPIINCS，这里我们手动定义以确保编译器能找到 mpif.h
+#--------------------------------------------------------------------------
+           MPIINCS       = -I/mingw64/include
+           MPILIB        = -lmsmpi
 
-# 1. 精度：建议桌面集成使用双精度
+#==========================================================================
+# 模型功能开关 (Flags)
+#==========================================================================
            FLAG_1 = -DDOUBLE_PRECISION
-
-# 2. 干湿网格
            FLAG_3 = -DWET_DRY
-
-# 3. 并行计算 (MPI)
            FLAG_4 = -DMULTIPROCESSOR
 
-# 4. METIS 划分库配置 (假设您已按照方案二编译了 METIS_source)
+           # METIS 路径：确保指向 TOPDIR 下的 METIS_source
            FLAG_411 = -DMETIS_5
            PARLIB   = 
            PARTINCS = -I$(TOPDIR)/METIS_source/include
            PARTLIBS = -L$(TOPDIR)/METIS_source -lmetis
 
-# 5. 其他物理/数学标志 (保留您的原始选择)
            FLAG_7  = -DDATA_ASSIM
            FLAG_8  = -DLIMITED_NO
            FLAG_9  = -DSEMI_IMPLICIT
@@ -67,26 +66,16 @@
 #==========================================================================
 # 编译器与平台定义 (针对 Windows/gfortran 深度定制)
 #==========================================================================
-
-         # 预处理器路径
          CPP      = /usr/bin/cpp 
          COMPILER = -DGFORTRAN
          
-         # 编译器定义
-         # 注意：在 MSYS2 下链接 MS-MPI，FC 直接用 gfortran 即可
          FC       = gfortran
          CC       = gcc
          CXX      = g++
          CFLAGS   = -O3
 
-         # 核心编译参数 (关键说明):
-         # -O3: 开启最高级优化
-         # -ffree-line-length-none: 防止旧代码行过长报错
-         # -fallow-argument-mismatch: 核心补丁！解决 FVCOM 4 在现代 gfortran 下的兼容性问题
+         # OPT 包含核心补丁 -fallow-argument-mismatch
          OPT      = -O3 -ffree-line-length-none -fallow-argument-mismatch
-         
-         # 显式链接 Microsoft MPI
-         MPILIB   = -lmsmpi
          CLIB     = 
 
 #==========================================================================
@@ -118,12 +107,13 @@
                    $(FLAG_USE_NETCDF4) $(FLAG_USE_COMPRESSION)
 
 #--------------------------------------------------------------------------
-# 最终库文件链接顺序 (顺序极其重要)
+# 最终库文件链接顺序 (调整了 MPI 和 NetCDF 的层级)
 #--------------------------------------------------------------------------
          LIBS = $(LIBDIR) $(CLIB) $(PARLIB) $(PARTLIBS) $(IOLIBS) $(DTLIBS) \
                 $(MPILIB) $(GOTMLIB) $(KFLIB) $(BIOLIB) \
                 $(OILIB) $(VISITLIB) $(PROJLIBS) $(PETSC_LIB)
 
-         INCS = $(INCDIR) $(IOINCS) $(GOTMINCS) $(BIOINCS) \
+         # 这里手动加入了 $(MPIINCS) 确保编译器能找到 mpif.h
+         INCS = $(INCDIR) $(IOINCS) $(MPIINCS) $(GOTMINCS) $(BIOINCS) \
                 $(VISITINCPATH) $(PROJINCS) $(DTINCS) $(PARTINCS) \
                 $(PETSC_FC_INCLUDES)
