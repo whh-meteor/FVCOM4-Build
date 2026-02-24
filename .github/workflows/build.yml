@@ -43,17 +43,25 @@ jobs:
           sed -i 's/\\rm/rm -f/g' makefile
           sed -i 's/mod_prec.o : mod_prec.o//g' makefile
 
-          # 4. 【核心修复更新】：修正多种 Fortran 非标准语法
-          echo "Fixing non-standard Fortran syntax in all .F files..."
+          # 4. 【核心修复更新】：修正 Fortran 语法
+          echo "Fixing non-standard Fortran syntax..."
           
-          # (a) 修正动态格式语法 <...>I10 -> *(I10)
+          # (a) 修正动态格式 <...>I10 -> *(I10)
           find . -name "*.F" -exec sed -i 's/<[^>]*>I10/*(I10)/g' {} +
           find . -name "*.F" -exec sed -i 's/<[^>]*>/*/g' {} +
           
           # (b) 修正 sinter.F 中的非法运算符 *= -> ==
-          # 增加空格匹配以防误伤，并针对性修复 sinter.F
-          sed -i 's/\*= /== /g' sinter.F
           sed -i 's/\*=/==/g' sinter.F
+
+          # (c) 修正 mod_utils.F 中的数值逻辑判断 (Intel -> GNU 兼容)
+          # 将 if(val) 改为 if(val /= 0)
+          sed -i 's/if(y0 \* maxval(yt)) then/if((y0 * maxval(yt)) \/= 0.0) then/g' mod_utils.F
+          sed -i 's/if(x0 \* maxval(xt)) then/if((x0 * maxval(xt)) \/= 0.0) then/g' mod_utils.F
+          
+          # (d) 处理 mod_utils.F 1844 行的嵌套错误
+          # 这是一个比较常见的代码补丁导致的冗余 endif，我们注释掉它或删除
+          # 根据报错，1844 行多了一个 endif，我们尝试用 sed 匹配删除该行的 endif
+          sed -i '1844s/endif/! fixed_by_gemini_endif/' mod_utils.F
 
           # 5. 编译库
           echo "Building libraries..."
