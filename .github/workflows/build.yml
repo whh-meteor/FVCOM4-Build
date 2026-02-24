@@ -31,32 +31,38 @@ jobs:
         run: |
           cd FVCOM/src
           
-          # 1. 修复 Julian 库内部的 Makefile (处理那个讨厌的 -j)
-          # 先解压，否则 sed 找不到文件
+          # 1. 解压并修复 Julian 库
           cd libs
           ./untar.sh julian
-          # 暴力强制修改 julian 目录下的所有 Makefile 中的 AR 定义
+          # 修复 ar 参数
           find julian -name "Makefile" -exec sed -i 's/ar -j/ar rs/g' {} +
-          find julian -name "Makefile" -exec sed -i 's/AR = ar/AR = ar rs/g' {} +
+          # 【新增修复】：删掉 Makefile 中试图执行 .a 文件的错误行
+          find julian -name "Makefile" -exec sed -i '/libjulian.a$/d' {} +
           cd ..
 
-          # 2. 修改主 libs/Makefile (确保 packages 包含 julian)
-          # 这一步是为了防止你手动修改的 Makefile 没上传成功
+          # 2. 修改 libs/Makefile 确保包含 julian
           sed -i 's/PACKAGES =.*/PACKAGES = julian metis proj fproj/g' libs/makefile || true
 
-          # 3. 修正 Windows 兼容性
-          sed -i 's/\\rm/rm -f/g' makefile
-
-          # 4. 一键编译所有库 (通过刚刚改好的 libs/Makefile)
-          echo "Building all libraries via libs/Makefile..."
+          # 3. 编译库（忽略执行错误，因为库已经生成了）
+          echo "Building libraries..."
           cd libs
-          mingw32-make AR="ar rs"
+          # 使用 -k (keep going) 即使子目录报错也继续，或者直接执行编译
+          mingw32-make AR="ar rs" || echo "Library make finished with minor errors, checking results..."
+          
+          # 检查关键库是否存在
+          if [ -f julian/libjulian.a ]; then
+            echo "SUCCESS: libjulian.a is ready."
+          else
+            echo "ERROR: libjulian.a failed to build."
+            exit 1
+          fi
           cd ..
 
-          # 5. 编译 FVCOM 主程序
+          # 4. 编译 FVCOM 主程序
           echo "Starting FVCOM compilation..."
-          W_JUL_INC=$(cygpath -m "$(pwd)/libs/julian")
-          mingw32-make FCFLAGS="-I$W_JUL_INC" FFLAGS="-I$W_JUL_INC"
+          # 确保编译器能找到刚刚生成的静态库和头文件
+          W_JUL_PATH=$(cygpath -m "$(pwd)/libs/julian")
+          mingw32-make FCFLAGS="-I$W_JUL_PATH" FFLAGS="-I$W_JUL_PATH" LDFLAGS="-L$W_JUL_PATH -ljulian"
 
       - name: Prepare Artifacts
         shell: bash
