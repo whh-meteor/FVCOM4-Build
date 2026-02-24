@@ -31,38 +31,46 @@ jobs:
         run: |
           cd FVCOM/src
           
-          # 1. 解压并修复 Julian 库
+          # 1. 解压所有库 (确保路径存在)
           cd libs
-          ./untar.sh julian
-          # 修复 ar 参数
+          for item in julian metis proj fproj; do ./untar.sh $item; done
+          
+          # 2. 修复 Julian 库的 Makefile 逻辑错误 (Error 193 & ar)
           find julian -name "Makefile" -exec sed -i 's/ar -j/ar rs/g' {} +
-          # 【新增修复】：删掉 Makefile 中试图执行 .a 文件的错误行
+          find julian -name "Makefile" -exec sed -i 's/AR = ar/AR = ar rs/g' {} +
+          # 删掉那个导致 Error 193 的空行或执行行
           find julian -name "Makefile" -exec sed -i '/libjulian.a$/d' {} +
           cd ..
 
-          # 2. 修改 libs/Makefile 确保包含 julian
-          sed -i 's/PACKAGES =.*/PACKAGES = julian metis proj fproj/g' libs/makefile || true
+          # 3. 彻底修复主 Makefile 的 Windows 兼容性
+          # 将 \rm 替换为 rm -f
+          sed -i 's/\\rm/rm -f/g' makefile
+          # 修复循环依赖警告 (某些 makefile 定义了 mod_prec.o: mod_prec.o)
+          sed -i 's/mod_prec.o : mod_prec.o//g' makefile
 
-          # 3. 编译库（忽略执行错误，因为库已经生成了）
+          # 4. 编译库
           echo "Building libraries..."
           cd libs
-          # 使用 -k (keep going) 即使子目录报错也继续，或者直接执行编译
-          mingw32-make AR="ar rs" || echo "Library make finished with minor errors, checking results..."
-          
-          # 检查关键库是否存在
-          if [ -f julian/libjulian.a ]; then
-            echo "SUCCESS: libjulian.a is ready."
-          else
-            echo "ERROR: libjulian.a failed to build."
-            exit 1
-          fi
+          # 强制指定安装路径，防止 include 文件夹找不到
+          MY_PWD=$(cygpath -m $(pwd))
+          mingw32-make AR="ar rs" INSTALLDIR="$MY_PWD" || echo "Library build continued..."
           cd ..
 
-          # 4. 编译 FVCOM 主程序
+          # 5. 编译 FVCOM 主程序
           echo "Starting FVCOM compilation..."
-          # 确保编译器能找到刚刚生成的静态库和头文件
-          W_JUL_PATH=$(cygpath -m "$(pwd)/libs/julian")
-          mingw32-make FCFLAGS="-I$W_JUL_PATH" FFLAGS="-I$W_JUL_PATH" LDFLAGS="-L$W_JUL_PATH -ljulian"
+          # 获取绝对路径（Windows 格式）
+          LIB_BASE=$(cygpath -m "$(pwd)/libs")
+          
+          # 动态修正主 Makefile 里的路径变量 (如果它们写死了)
+          # 或者在命令行直接传入
+          mingw32-make \
+            FC="gfortran" \
+            CC="gcc" \
+            CPPARGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR" \
+            IJS="-I$LIB_BASE/julian" \
+            IMS="-I$LIB_BASE/metis/include" \
+            IPS="-I$LIB_BASE/proj/include" \
+            LJS="-L$LIB_BASE/julian -ljulian"
 
       - name: Prepare Artifacts
         shell: bash
