@@ -7,7 +7,13 @@
 # 使用相对路径最稳健，src 的上一层就是 FVCOM 根目录
            TOPDIR        = ..
            INSTALLDIR    = $(TOPDIR)/libs/install
+           # 建议：去掉硬编码的 /mingw64/，利用 GCC 默认搜索路径
+           # 如果必须指定，使用相对于 MSYS2 根目录的路径
+           LIBPATH       = /mingw64/lib
+           INCLUDEPATH   = /mingw64/include
 
+           LIBDIR        = -L$(LIBPATH)
+           INCDIR        = -I$(INCLUDEPATH)
 #===========================================================================
 # 预处理器选项 (CPP)
 #===========================================================================
@@ -31,6 +37,7 @@
 #--------------------------------------------------------------------------
 # NETCDF 配置 (针对 MSYS2 环境)
 #--------------------------------------------------------------------------
+# 使用系统的 netcdf 和 msmpi
            IOLIBS        = -lnetcdff -lnetcdf
            IOINCS        = -I/mingw64/include
 
@@ -52,7 +59,7 @@
            FLAG_411 = -DMETIS_5
            PARLIB   = 
            PARTINCS = -I/mingw64/include
-           PARTLIBS = -L/mingw64/lib -lmetis
+           PARTLIBS = -lmetis
 
            FLAG_7  = -DDATA_ASSIM
            FLAG_8  = -DLIMITED_NO
@@ -66,7 +73,7 @@
 #==========================================================================
 # 编译器与平台定义 (针对 Windows/gfortran 深度定制)
 #==========================================================================
-         CPP      = cpp 
+         CPP      = gcc -E
          COMPILER = -DGFORTRAN
          
          FC       = gfortran
@@ -109,11 +116,8 @@
 #--------------------------------------------------------------------------
 # 最终库文件链接顺序 (调整了 MPI 和 NetCDF 的层级)
 #--------------------------------------------------------------------------
-         LIBS = $(LIBDIR) $(CLIB) $(PARLIB) $(PARTLIBS) $(IOLIBS) $(DTLIBS) \
-                $(MPILIB) $(GOTMLIB) $(KFLIB) $(BIOLIB) \
-                $(OILIB) $(VISITLIB) $(PROJLIBS) $(PETSC_LIB)
-
-         # 这里手动加入了 $(MPIINCS) 确保编译器能找到 mpif.h
-         INCS = $(INCDIR) $(IOINCS) $(MPIINCS) $(GOTMINCS) $(BIOINCS) \
-                $(VISITINCPATH) $(PROJINCS) $(DTINCS) $(PARTINCS) \
-                $(PETSC_FC_INCLUDES)
+# 重点：确保 MPIINCS 排在前面
+         INCS = $(MPIINCS) $(IOINCS) $(PARTINCS) $(INCDIR)
+         
+         # 汇总 LIBS
+         LIBS = $(LIBDIR) $(PARTLIBS) $(IOLIBS) -ljulian $(MPILIB)

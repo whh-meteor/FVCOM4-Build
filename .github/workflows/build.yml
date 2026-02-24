@@ -29,10 +29,20 @@ jobs:
       - name: Build FVCOM
         shell: msys2 {0}
         run: |
-          # 你的结构是 FVCOM/src
+          # 1. 进入目录
           cd FVCOM/src
+          
+          # 2. 补丁：手动定位 mpi.mod 并确保它在包含路径中
+          # 有时 msmpi 的 mod 在子目录里，我们把它找出来
+          MPI_MOD_PATH=$(find /mingw64 -name "mpi.mod" | head -n 1 | xargs dirname)
+          echo "MPI Mod found at: $MPI_MOD_PATH"
+          
+          # 3. 这里的清理非常重要，因为之前报错留下了错误的 mod_prec.f90
           mingw32-make clean
-          mingw32-make
+          
+          # 4. 强制指定包含路径来执行 make
+          # 我们把找到的 MPI 路径直接注入
+          mingw32-make FCFLAGS="-I$MPI_MOD_PATH" FFLAGS="-I$MPI_MOD_PATH"
 
       - name: Prepare Artifacts
         shell: bash
