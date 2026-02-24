@@ -17,44 +17,38 @@ jobs:
         with:
           msystem: MINGW64
           update: true
-          # 确保这里安装了 msmpi 及其开发头文件
+          # 关键：增加了 mingw-w64-x86_64-metis
           install: >-
             mingw-w64-x86_64-gcc-fortran
             mingw-w64-x86_64-make
             mingw-w64-x86_64-netcdf-fortran
             mingw-w64-x86_64-msmpi
+            mingw-w64-x86_64-metis
 
-      # 跳过下载 MS-MPI SDK，直接编译依赖库 METIS
-      - name: Build METIS
-        shell: msys2 {0}
-        run: |
-          cd FVCOM/METIS_source
-          sed -i 's/cc = icc/cc = gcc/g' Makefile || true
-          make
-          echo "METIS Build complete"
-
-      # 编译 FVCOM 主程序
+      # 跳过手动编译 METIS，直接编译 FVCOM
       - name: Build FVCOM
         shell: msys2 {0}
         run: |
+          # 你的结构是 FVCOM/src
           cd FVCOM/src
           mingw32-make clean
           mingw32-make -j2
 
-      # 搜集文件 (注意：由于没安装 SDK，我们需要从 MSYS2 目录提取所需的 DLL)
       - name: Prepare Artifacts
         shell: bash
         run: |
           mkdir -p publish
           cp FVCOM/src/fvcom.exe publish/
+          
+          # 拷贝 DLL (增加了 libmetis)
           cp /mingw64/bin/libnetcdff-*.dll publish/
           cp /mingw64/bin/libnetcdf-*.dll publish/
           cp /mingw64/bin/libgfortran-*.dll publish/
           cp /mingw64/bin/libquadmath-*.dll publish/
           cp /mingw64/bin/libwinpthread-*.dll publish/
           cp /mingw64/bin/libgcc_s_seh-*.dll publish/
-          # 关键：从 MSYS2 中提取 msmpi.dll，这样你下载后就能直接运行
-          cp /mingw64/bin/msmpi.dll publish/ || echo "msmpi.dll not found in bin, seeking in lib..."
+          cp /mingw64/bin/msmpi.dll publish/ || echo "msmpi.dll not found"
+          cp /mingw64/bin/libmetis-*.dll publish/ || echo "libmetis.dll not found"
 
       - name: Upload EXE Package
         uses: actions/upload-artifact@v4

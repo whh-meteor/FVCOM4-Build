@@ -51,8 +51,8 @@
            # METIS 路径：确保指向 TOPDIR 下的 METIS_source
            FLAG_411 = -DMETIS_5
            PARLIB   = 
-           PARTINCS = -I$(TOPDIR)/METIS_source/include
-           PARTLIBS = -L$(TOPDIR)/METIS_source -lmetis
+           PARTINCS = -I/mingw64/include
+           PARTLIBS = -L/mingw64/lib -lmetis
 
            FLAG_7  = -DDATA_ASSIM
            FLAG_8  = -DLIMITED_NO
