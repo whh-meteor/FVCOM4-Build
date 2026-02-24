@@ -29,20 +29,23 @@ jobs:
       - name: Build FVCOM
         shell: msys2 {0}
         run: |
-          # 1. 进入目录
           cd FVCOM/src
           
-          # 2. 补丁：手动定位 mpi.mod 并确保它在包含路径中
-          # 有时 msmpi 的 mod 在子目录里，我们把它找出来
-          MPI_MOD_PATH=$(find /mingw64 -name "mpi.mod" | head -n 1 | xargs dirname)
-          echo "MPI Mod found at: $MPI_MOD_PATH"
+          # 1. 核心补丁：修正 Makefile 中的 \rm 命令和路径冲突
+          # 去掉 \rm 前面的反斜杠，使之在 MSYS2 下可用
+          sed -i 's/\\rm/rm -f/g' makefile
           
-          # 3. 这里的清理非常重要，因为之前报错留下了错误的 mod_prec.f90
+          # 2. 核心补丁：解决 Windows 文件名大小写不敏感导致的 Circular dependency
+          # 我们在编译前强制删除可能冲突的临时文件
+          rm -f *.f90
+          
+          # 3. 准备物理路径
+          W_INC=$(cygpath -m /mingw64/include)
+          
+          # 4. 执行编译
+          # 显式传递路径变量，确保编译器 100% 找得到 mpi.mod
           mingw32-make clean
-          
-          # 4. 强制指定包含路径来执行 make
-          # 我们把找到的 MPI 路径直接注入
-          mingw32-make FCFLAGS="-I$MPI_MOD_PATH" FFLAGS="-I$MPI_MOD_PATH"
+          mingw32-make FCFLAGS="-I$W_INC" FFLAGS="-I$W_INC"
 
       - name: Prepare Artifacts
         shell: bash
