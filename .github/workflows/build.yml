@@ -26,8 +26,34 @@ jobs:
       - name: Install MS-MPI SDK
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri https://github.com/microsoft/Microsoft-MPI/releases/download/v12.0.1/msmpisetup.exe -OutFile msmpisetup.exe
-          Start-Process -FilePath .\msmpisetup.exe -ArgumentList "-s" -Wait
+          $url = "https://github.com/microsoft/Microsoft-MPI/releases/download/v12.0.1/msmpisetup.exe"
+          $out = "msmpisetup.exe"
+          $retries = 3
+          $success = $false
+          
+          # 循环重试下载，应对网络波动
+          for ($i = 1; $i -le $retries; $i++) {
+              try {
+                  Write-Host "Downloading MS-MPI (Attempt $i)..."
+                  # 设置安全协议，防止旧版 TLS 导致连接关闭
+                  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                  Invoke-WebRequest -Uri $url -OutFile $out -TimeoutSec 30
+                  $success = $true
+                  break
+              } catch {
+                  Write-Warning "Download failed: $($_.Exception.Message)"
+                  if ($i -lt $retries) { Start-Sleep -Seconds 5 }
+              }
+          }
+          
+          if ($success) {
+              Write-Host "Installing MS-MPI..."
+              Start-Process -FilePath .\$out -ArgumentList "-s" -Wait
+              Write-Host "MS-MPI Installation finished."
+          } else {
+              Write-Error "Failed to download MS-MPI after $retries attempts."
+              exit 1
+          }
 
       # 第一步：编译 METIS (路径：FVCOM/METIS_source)
       - name: Build METIS
