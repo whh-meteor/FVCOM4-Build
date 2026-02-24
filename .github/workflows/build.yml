@@ -34,14 +34,16 @@ jobs:
           # 1. 修正 Makefile
           sed -i 's/\\rm/rm -f/g' makefile
           
-          # 2. 尝试先编译 julian 库（如果它有自己的 Makefile）
-          if [ -d "../libs/julian" ]; then
-            cd ../libs/julian && mingw32-make && cd ../../src
-          fi
+          # 2. 【核心补丁】全系统搜索 fjulian.inc 所在的物理路径
+          # 这能解决相对路径 ../libs/julian 找不到的问题
+          REAL_JULIAN_DIR=$(find $(pwd)/../ -name "fjulian.inc" | xargs dirname | head -n 1)
+          W_JULIAN_DIR=$(cygpath -m "$REAL_JULIAN_DIR")
+          echo "Found fjulian.inc at Windows Path: $W_JULIAN_DIR"
           
-          # 3. 编译主程序
+          # 3. 编译
           mingw32-make clean
-          mingw32-make
+          # 将搜索到的绝对路径强行注入 FCFLAGS
+          mingw32-make FCFLAGS="-I$W_JULIAN_DIR" FFLAGS="-I$W_JULIAN_DIR"
 
       - name: Prepare Artifacts
         shell: bash
