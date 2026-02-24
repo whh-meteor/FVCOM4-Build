@@ -24,89 +24,29 @@ jobs:
             mingw-w64-x86_64-msmpi
             mingw-w64-x86_64-metis
             python3
-
-      - name: Build Libraries and FVCOM
+      - name: Build FVCOM
         shell: msys2 {0}
         run: |
           cd FVCOM/src
-          
-          # 1. 解压库
+
           cd libs
           for item in julian metis proj fproj; do ./untar.sh $item; done
-          
-          # 2. 修复 Julian 库的 Makefile (解决 Error 193)
-          # Error 193 是因为 Makefile 尝试执行生成的 .a 文件
-          # 我们把生成库文件后的自执行行删掉
-          find julian -name "Makefile" -exec sed -i '/\$(LIBRARY):/,/^\s*$/ { /libjulian.a$/d }' {} +
-          find julian -name "Makefile" -exec sed -i 's/ar -j/ar rs/g' {} +
-          find julian -name "Makefile" -exec sed -i 's/AR = ar/AR = ar rs/g' {} +
-          cd ..
-
-          # 3. 基础 Makefile 修复
-          sed -i 's/\\rm/rm -f/g' makefile
-          sed -i 's/mod_prec.o : mod_prec.o//g' makefile
-
-          # 4. 【强制清洗脚本】：直接在字节流层面替换非标准语法
-          cat << 'EOF' > fix_syntax.py
-          import os, re
-          def clean_syntax(directory):
-              # 匹配星号后面跟着任意空格或制表符，然后是等号
-              # 使用二进制模式处理，防止编码干扰
-              pattern = re.compile(b'\*[\t ]*=')
-              for root, dirs, files in os.walk(directory):
-                  for file in files:
-                      if file.lower().endswith((".f", ".f90", ".for", ".inc", ".f03")):
-                          path = os.path.join(root, file)
-                          with open(path, 'rb') as f:
-                              data = f.read()
-                          
-                          # 替换 *= 为 ==
-                          new_data = pattern.sub(b' == ', data)
-                          # 修正 Intel 尖括号格式化
-                          new_data = re.sub(b'<([^>]*)>I10', b'* (I10)', new_data)
-                          new_data = re.sub(b'<([^>]*)>', b'*', new_data)
-                          
-                          if new_data != data:
-                              with open(path, 'wb') as f:
-                                  f.write(new_data)
-                              print(f"Fixed syntax in: {path}")
-
-          clean_syntax(".")
-          EOF
-
-          # 执行第一次清洗
-          python3 fix_syntax.py
-
-          # 5. 编译库
-          echo "Building libraries..."
-          cd libs
-          mkdir -p metis/include proj/include
           MY_PWD=$(cygpath -m $(pwd))
-          # 忽略 Julian 编译中的特定执行错误，只要库文件生成了即可
-          mingw32-make AR="ar rs" INSTALLDIR="$MY_PWD" || echo "Library build continued..."
+          mingw32-make AR="ar rs" INSTALLDIR="$MY_PWD"
           cd ..
 
-          # 6. 编译 FVCOM (加入预处理后强制清洗)
-          echo "Starting FVCOM compilation..."
           LIB_BASE=$(cygpath -m "$(pwd)/libs")
-          
-          # 为了对付 gcc -E 生成的临时文件，我们手动运行一次预处理并清洗
-          # 这样 gfortran 编译时面对的就是干净的代码
-          for f in *.F; do
-            gcc -E -DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR "$f" > "${f%.F}.f90"
-          done
-          python3 fix_syntax.py
 
-          # 再次运行 make，由于 .f90 已经存在且是干净的，make 会直接编译它们
           mingw32-make \
             FC="gfortran" \
             CC="gcc" \
-            FFLAGS="-O3 -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
-            CPPARGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR" \
+            FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
+            CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR" \
             IJS="-I$LIB_BASE/julian" \
             IMS="-I$LIB_BASE/metis/include" \
             IPS="-I$LIB_BASE/proj/include" \
             LJS="-L$LIB_BASE/julian -ljulian"
+ 
 
       - name: Prepare Artifacts
         shell: bash
