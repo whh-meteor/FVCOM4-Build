@@ -39,22 +39,24 @@ jobs:
           find julian -name "Makefile" -exec sed -i '/libjulian.a$/d' {} +
           cd ..
 
-          # 3. 修复主 Makefile 的 Windows 兼容性 (rm 命令)
+          # 3. 修复主 Makefile 的 Windows 兼容性
           sed -i 's/\\rm/rm -f/g' makefile
           sed -i 's/mod_prec.o : mod_prec.o//g' makefile
 
-          # 4. 【核心修复】：在编译前修正所有 Fortran 语法错误
+          # 4. 【核心修复】：在预处理前强制修正所有语法
           echo "Applying global syntax patches..."
 
-          # (a) 修正 *= 运算符 (匹配前后可能有空格的情况，全部转为 ==)
-          # 使用正则表达式 [[:space:]]* 匹配可选空格
-          find . -name "*.F" -exec sed -i 's/\*[[:space:]]*=/ == /g' {} +
+          # (a) 修正 *= 运算符：使用更兼容的 sed 写法覆盖带空格和不带空格的情况
+          # 第一步：处理有空格的 " * ="
+          find . -name "*.F" -exec sed -i 's/\* *=/ == /g' {} +
+          # 第二步：处理没空格的 "*="
+          find . -name "*.F" -exec sed -i 's/\*=/ == /g' {} +
 
           # (b) 修正 Intel 尖括号格式语法 <...>I10 -> *(I10)
           find . -name "*.F" -exec sed -i 's/<[^>]*>I10/*(I10)/g' {} +
           find . -name "*.F" -exec sed -i 's/<[^>]*>/*/g' {} +
 
-          # (c) 修正 mod_utils.F 特有的逻辑表达式错误
+          # (c) 修正 mod_utils.F 数值逻辑判断
           if [ -f mod_utils.F ]; then
             sed -i 's/if(y0 \* maxval(yt)) then/if((y0 * maxval(yt)) \/= 0.0) then/g' mod_utils.F
             sed -i 's/if(x0 \* maxval(xt)) then/if((x0 * maxval(xt)) \/= 0.0) then/g' mod_utils.F
@@ -72,7 +74,6 @@ jobs:
           echo "Starting FVCOM compilation..."
           LIB_BASE=$(cygpath -m "$(pwd)/libs")
           
-          # 显式传递路径变量，确保编译器能找到头文件
           mingw32-make \
             FC="gfortran" \
             CC="gcc" \
@@ -87,10 +88,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p publish
-          # 如果 fvcom.exe 生成了就拷贝
           [ -f FVCOM/src/fvcom.exe ] && cp FVCOM/src/fvcom.exe publish/ || echo "fvcom.exe not found"
           
-          # 拷贝必要的运行时 DLL
           cp /mingw64/bin/libnetcdff-*.dll publish/ || true
           cp /mingw64/bin/libnetcdf-*.dll publish/ || true
           cp /mingw64/bin/libgfortran-*.dll publish/ || true
