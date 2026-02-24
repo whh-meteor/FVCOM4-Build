@@ -1,0 +1,69 @@
+name: FVCOM_Windows_Build
+
+on: 
+  push:
+  workflow_dispatch:
+
+jobs:
+  build_job:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc-fortran
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-netcdf-fortran
+            mingw-w64-x86_64-msmpi
+
+      - name: Install MS-MPI SDK
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri https://github.com/microsoft/Microsoft-MPI/releases/download/v12.0.1/msmpisetup.exe -OutFile msmpisetup.exe
+          Start-Process -FilePath .\msmpisetup.exe -ArgumentList "-s" -Wait
+
+      # 第一步：编译 METIS (路径：FVCOM/METIS_source)
+      - name: Build METIS
+        shell: msys2 {0}
+        run: |
+          cd FVCOM/METIS_source
+          sed -i 's/cc = icc/cc = gcc/g' Makefile || true
+          make
+          echo "METIS Build complete"
+
+      # 第二步：编译 FVCOM (路径：FVCOM/src)
+      - name: Build FVCOM
+        shell: msys2 {0}
+        run: |
+          cd FVCOM/src
+          # 强制清理并编译
+          mingw32-make clean
+          mingw32-make -j2
+
+      # 第三步：搜集文件
+      - name: Prepare Artifacts
+        shell: bash
+        run: |
+          mkdir -p publish
+          # 拷贝编译好的 exe
+          cp FVCOM/src/fvcom.exe publish/
+          # 拷贝必要的运行时 DLL
+          cp /mingw64/bin/libnetcdff-*.dll publish/
+          cp /mingw64/bin/libnetcdf-*.dll publish/
+          cp /mingw64/bin/libgfortran-*.dll publish/
+          cp /mingw64/bin/libquadmath-*.dll publish/
+          cp /mingw64/bin/libwinpthread-*.dll publish/
+          cp /mingw64/bin/libgcc_s_seh-*.dll publish/
+
+      - name: Upload EXE Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: FVCOM4-Windows-Binaries
+          path: publish/
