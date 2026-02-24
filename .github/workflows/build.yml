@@ -23,6 +23,7 @@ jobs:
             mingw-w64-x86_64-netcdf-fortran
             mingw-w64-x86_64-msmpi
             mingw-w64-x86_64-metis
+            python3
 
       - name: Build Libraries and FVCOM
         shell: msys2 {0}
@@ -43,30 +44,37 @@ jobs:
           sed -i 's/\\rm/rm -f/g' makefile
           sed -i 's/mod_prec.o : mod_prec.o//g' makefile
 
-          # 4. 【核心修复】：采取更加激进且简单的替换策略
-          echo "Applying global syntax patches..."
+          # 4. 【终极修复】：使用 Python 强制修正语法错误
+          echo "Applying Python-based syntax patches..."
+          python3 << 'EOF'
+          import os
+          import re
 
-          # (a) 针对 sinter.F 的精准清除 (处理带有 Y(I) *= 这种特征的代码)
-          # 我们把 *= 替换为 ==，并涵盖各种空格组合
-          if [ -f sinter.F ]; then
-            sed -i 's/\*=/==/g' sinter.F
-            sed -i 's/\* =/==/g' sinter.F
-          fi
+          def fix_file(filepath):
+              with open(filepath, 'r', encoding='latin-1') as f:
+                  content = f.read()
+              
+              # (a) 修正 *= 运算符 (支持任意空格和 Tab)
+              # 匹配星号 + 任意空白符 + 等号
+              new_content = re.sub(r'\*\s*=', ' == ', content)
+              
+              # (b) 修正 Intel 尖括号格式语法
+              new_content = re.sub(r'<[^>]*>I10', '*(I10)', new_content)
+              new_content = re.sub(r'<[^>]*>', '*', new_content)
+              
+              # (c) 修正 mod_utils.F 特有的逻辑表达式
+              if "mod_utils.F" in filepath:
+                  new_content = new_content.replace('if(y0 * maxval(yt)) then', 'if((y0 * maxval(yt)) /= 0.0) then')
+                  new_content = new_content.replace('if(x0 * maxval(xt)) then', 'if((x0 * maxval(xt)) /= 0.0) then')
 
-          # (b) 全局修复 *= 到 == (针对所有 .F 文件)
-          # 使用简易匹配，避免复杂的正则转义
-          find . -name "*.F" -exec sed -i 's/\*=/==/g' {} +
-          find . -name "*.F" -exec sed -i 's/\* =/==/g' {} +
+              with open(filepath, 'w', encoding='latin-1') as f:
+                  f.write(new_content)
 
-          # (c) 修正 Intel 尖括号格式语法 <...>I10 -> *(I10)
-          find . -name "*.F" -exec sed -i 's/<[^>]*>I10/*(I10)/g' {} +
-          find . -name "*.F" -exec sed -i 's/<[^>]*>/*/g' {} +
-
-          # (d) 修正 mod_utils.F 数值逻辑判断
-          if [ -f mod_utils.F ]; then
-            sed -i 's/if(y0 \* maxval(yt)) then/if((y0 * maxval(yt)) \/= 0.0) then/g' mod_utils.F
-            sed -i 's/if(x0 \* maxval(xt)) then/if((x0 * maxval(xt)) \/= 0.0) then/g' mod_utils.F
-          fi
+          for root, dirs, files in os.walk("."):
+              for file in files:
+                  if file.endswith(".F") or file.endswith(".for"):
+                      fix_file(os.path.join(root, file))
+          EOF
 
           # 5. 编译库
           echo "Building libraries..."
