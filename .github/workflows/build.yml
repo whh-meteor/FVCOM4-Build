@@ -26,54 +26,35 @@ jobs:
             mingw-w64-x86_64-metis
 
       # 跳过手动编译 METIS，直接编译 FVCOM
-      - name: Build FVCOM
+      - name: Build Libraries and FVCOM
         shell: msys2 {0}
         run: |
           cd FVCOM/src
           
-          # 1. 解压内部库
-          echo "Unpacking internal libraries..."
-          chmod +x libs/untar.sh
+          # 1. 修复 Julian 库内部的 Makefile (处理那个讨厌的 -j)
+          # 先解压，否则 sed 找不到文件
           cd libs
           ./untar.sh julian
-          ./untar.sh metis
-          ./untar.sh netcdf
-          ./untar.sh proj
-          ./untar.sh fproj
+          # 暴力强制修改 julian 目录下的所有 Makefile 中的 AR 定义
+          find julian -name "Makefile" -exec sed -i 's/ar -j/ar rs/g' {} +
+          find julian -name "Makefile" -exec sed -i 's/AR = ar/AR = ar rs/g' {} +
           cd ..
-          
-          # 2. 编译 Julian 库
-          echo "Compiling Julian library..."
-          cd libs/julian
-          
-          # 修正编译器定义
-          sed -i 's/cc = icc/cc = gcc/g' Makefile || true
-          sed -i 's/fc = ifort/fc = gfortran/g' Makefile || true
-          
-          # 【核心修复】：修正 ar 参数，去掉不支持的 -j
-          # 这里的 sed 会把 "ar libjulian.a" 替换为 "ar rc libjulian.a"
-          # 或者直接修改 AR 变量的定义（取决于 Makefile 的写法）
-          sed -i 's/ar /ar rc /g' Makefile || true
-          sed -i 's/ar -j/ar rc/g' Makefile || true
-          
-          # 执行编译（增加 -w 忽略那些 old-style 警告）
-          mingw32-make CFLAGS="-O3 -w" FFLAGS="-O3 -w"
-          
-          # 验证生成
-          if [ -f libjulian.a ]; then
-            echo "Successfully built libjulian.a"
-          else
-            echo "Error: libjulian.a not found!"
-            exit 1
-          fi
-          cd ../..
-          
-          # 3. 修正主 Makefile 兼容性
+
+          # 2. 修改主 libs/Makefile (确保 packages 包含 julian)
+          # 这一步是为了防止你手动修改的 Makefile 没上传成功
+          sed -i 's/PACKAGES =.*/PACKAGES = julian metis proj fproj/g' libs/makefile || true
+
+          # 3. 修正 Windows 兼容性
           sed -i 's/\\rm/rm -f/g' makefile
-          
-          # 4. 执行主程序编译
+
+          # 4. 一键编译所有库 (通过刚刚改好的 libs/Makefile)
+          echo "Building all libraries via libs/Makefile..."
+          cd libs
+          mingw32-make AR="ar rs"
+          cd ..
+
+          # 5. 编译 FVCOM 主程序
           echo "Starting FVCOM compilation..."
-          mingw32-make clean
           W_JUL_INC=$(cygpath -m "$(pwd)/libs/julian")
           mingw32-make FCFLAGS="-I$W_JUL_INC" FFLAGS="-I$W_JUL_INC"
 

@@ -1,33 +1,42 @@
-# $Id$
-# $Name$
-# $Revision$
-#-----------BEGIN MAKEFILE-------------------------------------------------
-            SHELL         = /bin/sh
+#----------- FVCOM/src/libs/Makefile - Fixed for MSYS2 ----------------
+SHELL         = /bin/sh
+include ../make.inc
+
+# 确保所有需要的包都在列表中
+PACKAGES = julian metis proj fproj netcdf
 
 MYINSTALLDIR = $(INSTALLDIR)
 
-PACKAGES =	proj#	fproj	julian	metis	netcdf	
-
-
 all:
-	for item in $(PACKAGES); do (./untar.sh $$item ) || exit 1; done
-	cd proj && ./configure CC=$(CC) CFLAGS=-O3 CXX=$(CC) CXXFLAGS=-O3 F77=$(FC) FFLAGS=-O3 --prefix=$(MYINSTALLDIR)
-	cd proj && make install
-	cd fproj && ./configure CPPFLAGS='$(COMPILER)' CC=$(CC) CFLAGS=-O3 CXX=$(CXX) CXXFLAGS=-O3 FC=$(FC) FFLAGS=-O3 --with-proj4=$(MYINSTALLDIR) --prefix=$(MYINSTALLDIR)
-	cd fproj && make install
-	cd netcdf && ./configure CC=$(CC) CFLAGS=-O3 CXX=$(CC) CXXFLAGS=-O3 F77=$(FC) F90=$(FC) FFLAGS=-O3 --prefix=$(MYINSTALLDIR) --build=$(MACHTYPE)
-	cd netcdf && make install
-#	cd metis && make install
-	cd julian && make install
+	@echo "Starting to build all libraries..."
+	# 1. 循环解压
+	for item in $(PACKAGES); do \
+		if [ ! -d $$item ]; then ./untar.sh $$item; fi; \
+	done
+	
+	# 2. 编译 Julian (FVCOM 核心时间库)
+	@echo "Building Julian..."
+	cd julian && $(MAKE) CC="$(CC)" FC="$(FC)" AR="ar rs"
 
+	# 3. 编译 Metis
+	@echo "Building Metis..."
+	cd metis && $(MAKE) CC="$(CC)" AR="ar rs"
 
+	# 4. 编译 Proj & FProj
+	@echo "Building Proj..."
+	cd proj && ./configure CC="$(CC)" CFLAGS="-O3" --prefix=$(MYINSTALLDIR) --disable-shared
+	cd proj && $(MAKE) install
+	cd fproj && ./configure CC="$(CC)" FC="$(FC)" --with-proj4=$(MYINSTALLDIR) --prefix=$(MYINSTALLDIR)
+	cd fproj && $(MAKE) install
+
+	# 5. 编译 NetCDF (如果系统没安装)
+	@echo "Building NetCDF..."
+	cd netcdf && ./configure CC="$(CC)" FC="$(FC)" --prefix=$(MYINSTALLDIR)
+	cd netcdf && $(MAKE) install
 
 clean:
-	for item in $(PACKAGES); do (cd $$item && make clean) || exit 1; done
+	for item in $(PACKAGES); do (cd $$item && $(MAKE) clean) || true; done
 
 clobber:
-	for item in $(PACKAGES); do (rm -rf $$item) || exit 1; done
+	for item in $(PACKAGES); do (rm -rf $$item) || true; done
 	rm -rf $(MYINSTALLDIR)/*
-
-includes::
-include ../make.inc
