@@ -30,22 +30,11 @@ jobs:
         shell: msys2 {0}
         run: |
           cd FVCOM/src
-          
-          # 1. 核心补丁：修正 Makefile 中的 \rm 命令和路径冲突
-          # 去掉 \rm 前面的反斜杠，使之在 MSYS2 下可用
+          # 1. 修正 Makefile 中的反斜杠命令冲突
           sed -i 's/\\rm/rm -f/g' makefile
-          
-          # 2. 核心补丁：解决 Windows 文件名大小写不敏感导致的 Circular dependency
-          # 我们在编译前强制删除可能冲突的临时文件
-          rm -f *.f90
-          
-          # 3. 准备物理路径
-          W_INC=$(cygpath -m /mingw64/include)
-          
-          # 4. 执行编译
-          # 显式传递路径变量，确保编译器 100% 找得到 mpi.mod
+          # 2. 编译
           mingw32-make clean
-          mingw32-make FCFLAGS="-I$W_INC" FFLAGS="-I$W_INC"
+          mingw32-make
 
       - name: Prepare Artifacts
         shell: bash
