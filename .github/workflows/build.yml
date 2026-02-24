@@ -29,24 +29,27 @@ jobs:
         run: |
           cd FVCOM/src
           
-          # 1. 解压所有库 (确保路径存在)
+          # 1. 解压所有库
           cd libs
           for item in julian metis proj fproj; do ./untar.sh $item; done
           
-          # 2. 修复 Julian 库的 Makefile 逻辑错误
+          # 2. 修复 Julian 库
           find julian -name "Makefile" -exec sed -i 's/ar -j/ar rs/g' {} +
           find julian -name "Makefile" -exec sed -i 's/AR = ar/AR = ar rs/g' {} +
           find julian -name "Makefile" -exec sed -i '/libjulian.a$/d' {} +
           cd ..
 
-          # 3. 彻底修复主 Makefile 的 Windows 兼容性
+          # 3. 修复主 Makefile 的 Windows 兼容性
           sed -i 's/\\rm/rm -f/g' makefile
           sed -i 's/mod_prec.o : mod_prec.o//g' makefile
 
-          # 4. 【关键修复】：修正 gfortran 不支持的 Intel 尖括号格式语法
-          # 将 <MX_NBR_ELEM_GL+1> 这种语法替换为通用的 * (让编译器自动适配长度)
-          echo "Fixing Intel Fortran extensions in mod_station_timeseries.F..."
-          sed -i 's/<[^>]*>/*/g' mod_station_timeseries.F
+          # 4. 【核心修复更新】：修正 gfortran 的动态格式语法
+          # 将 <ANY_VARIABLE>I10 替换为 *(I10)
+          echo "Fixing Intel Fortran extensions in all .F files..."
+          # 这一行处理类似 <...>I10 的情况
+          find . -name "*.F" -exec sed -i 's/<[^>]*>I10/*(I10)/g' {} +
+          # 这一行作为兜底，处理其他尖括号
+          find . -name "*.F" -exec sed -i 's/<[^>]*>/*/g' {} +
 
           # 5. 编译库
           echo "Building libraries..."
@@ -60,11 +63,12 @@ jobs:
           echo "Starting FVCOM compilation..."
           LIB_BASE=$(cygpath -m "$(pwd)/libs")
           
-          # 增加 -fallow-argument-mismatch 以提高 gfortran 对旧代码的兼容性
+          # 显式传递路径和编译器参数
+          # 增加 -fno-range-check 以防某些常数溢出报错
           mingw32-make \
             FC="gfortran" \
             CC="gcc" \
-            FFLAGS="-O3 -fallow-argument-mismatch -ffree-line-length-none" \
+            FFLAGS="-O3 -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
             CPPARGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR" \
             IJS="-I$LIB_BASE/julian" \
             IMS="-I$LIB_BASE/metis/include" \
@@ -75,7 +79,6 @@ jobs:
         shell: bash
         run: |
           mkdir -p publish
-          # 检查编译结果，如果 exe 存在则拷贝
           if [ -f FVCOM/src/fvcom.exe ]; then
             cp FVCOM/src/fvcom.exe publish/
           fi
