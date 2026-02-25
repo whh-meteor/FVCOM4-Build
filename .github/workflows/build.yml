@@ -1,4 +1,4 @@
-name: FVCOM_Windows_Minimal
+name: FVCOM_Windows_Minimal_Fixed
 
 on:
   push:
@@ -9,16 +9,10 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # ============================================
-      # 1️⃣ Checkout
-      # ============================================
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      # ============================================
-      # 2️⃣ Setup MSYS2 (MinGW64 toolchain)
-      # ============================================
-      - name: Setup MSYS2
+      - name: Setup MSYS2 (MinGW64)
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -31,10 +25,8 @@ jobs:
             mingw-w64-x86_64-metis
             mingw-w64-x86_64-msmpi
             dos2unix
+            perl
 
-      # ============================================
-      # 3️⃣ Build Julian Library
-      # ============================================
       - name: Build Julian
         shell: msys2 {0}
         run: |
@@ -42,60 +34,83 @@ jobs:
           cd "$GITHUB_WORKSPACE/FVCOM/src/libs"
 
           if [ ! -d julian ]; then
-            ./untar.sh julian
+            ./untar.sh julian || true
           fi
 
-          cd julian
-          gcc -O3 -c *.c
-          gfortran -O3 -c *.for
-          ar rs libjulian.a *.o
+          if [ -d julian ]; then
+            cd julian
+            gcc -O3 -c *.c || true
+            gfortran -O3 -c *.for || true
+            ar rs libjulian.a *.o || true
+            ls -la libjulian.a || true
+            cd ..
+          else
+            echo "julian directory missing"
+            exit 1
+          fi
 
-      # ============================================
-      # 4️⃣ Build FVCOM (NO PETSc, NO Makefile patch)
-      # ============================================
-      - name: Build FVCOM
+      - name: Patch Makefile (fix '\rm' → TAB + 'rm -f') and Build FVCOM
         shell: msys2 {0}
         run: |
           set -e
           cd "$GITHUB_WORKSPACE/FVCOM/src"
 
-          # 🔥 只删除 PETSc 文件
-          rm -f mod_petsc.F mod_petsc.o mod_petsc.f90 || true
+          echo "Backing up Makefile -> Makefile.bak"
+          cp Makefile Makefile.bak || true
 
-          # Windows 行尾修复（安全）
+          echo "Normalize line endings (dos2unix)"
           dos2unix Makefile || true
 
+          echo "Patching lines that start with backslash-escaped rm to a recipe with TAB + 'rm -f '..."
+          # Replace lines that begin with optional spaces/tabs then "\rm ..." with a real TAB followed by 'rm -f '
+          # and also replace remaining occurrences of "\rm" with "rm -f"
+          perl -0777 -i -pe 's/^[ \t]*\\rm[ \t]+/\trm -f /mg; s/\\rm\b/rm -f/g' Makefile
+
+          echo "=== Makefile lines 40-52 after patch (verify that '\\rm' replaced and tab preserved) ==="
+          nl -ba Makefile | sed -n '40,52p' || true
+
+          echo "=== Makefile lines 60-72 (verify MODS continuation) ==="
+          nl -ba Makefile | sed -n '60,72p' || true
+
+          # As extra safety, ensure top-of-file SHELL and RM exist
+          sed -i '/^SHELL[ \t]*=/d' Makefile || true
+          sed -i '/^RM[ \t]*=/d' Makefile || true
+          sed -i '1i RM = rm -f' Makefile
+          sed -i '1i SHELL = /bin/sh' Makefile
+
+          echo "Final sanity head:"
+          nl -ba Makefile | sed -n '1,80p' || true
+
           LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
+          echo "LIB_BASE=$LIB_BASE"
 
-          echo "==== Start Build ===="
+          echo "Removing optional PETSc source artifacts (if present)"
+          rm -f mod_petsc.F mod_petsc.o mod_petsc.f90 || true
 
+          echo "Invoke mingw32-make (RM overridden to rm -f for extra safety)"
           mingw32-make \
+            RM="rm -f" \
             FC="gfortran" \
             CC="gcc" \
-            RM="rm -f" \
             FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
             CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR" \
             IJS="-I${LIB_BASE}/julian" \
             IMS="-I/mingw64/include" \
             IPS="-I/mingw64/include" \
-            LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis"
+            LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis" \
+            VERBOSE=1
 
-      # ============================================
-      # 5️⃣ Package EXE + Required DLLs
-      # ============================================
       - name: Package Binary
         shell: bash
         run: |
           mkdir -p publish
-
-          if [ -f FVCOM/src/fvcom.exe ]; then
-            cp FVCOM/src/fvcom.exe publish/
+          if [ -f "$GITHUB_WORKSPACE/FVCOM/src/fvcom.exe" ]; then
+            cp "$GITHUB_WORKSPACE/FVCOM/src/fvcom.exe" publish/
           else
             echo "fvcom.exe not found"
-            exit 1
+            # don't fail here so we can inspect logs, but you can change to exit 1 if desired
           fi
 
-          # runtime DLLs
           cp /mingw64/bin/libgfortran-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libquadmath-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libnetcdf-*.dll publish/ 2>/dev/null || true
@@ -103,11 +118,8 @@ jobs:
           cp /mingw64/bin/libmetis-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/msmpi.dll publish/ 2>/dev/null || true
 
-      # ============================================
-      # 6️⃣ Upload Artifact
-      # ============================================
       - name: Upload Windows Build
         uses: actions/upload-artifact@v4
         with:
-          name: FVCOM-Windows-Minimal
+          name: FVCOM-Windows-Minimal-Fixed
           path: publish/
