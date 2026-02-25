@@ -78,37 +78,37 @@ jobs:
           if [ ! -f mod_petsc.F ]; then
             echo "Creating stub mod_petsc.F to satisfy Makefile (no PETSc on Windows CI)"
             cat > mod_petsc.F <<'EOF'
-c --------------------------------------------------------
-c Stub module mod_petsc for Windows CI builds without PETSc
-c This provides a minimal module so Makefile rules succeed.
-c It does NOT implement PETSc functionality.
-c --------------------------------------------------------
-      module mod_petsc
-      implicit none
-      contains
-      subroutine mod_petsc_dummy()
-      ! dummy stub
-      return
-      end subroutine mod_petsc_dummy
-      end module mod_petsc
-EOF
-          fi
+          c --------------------------------------------------------
+          c Stub module mod_petsc for Windows CI builds without PETSc
+          c This provides a minimal module so Makefile rules succeed.
+          c It does NOT implement PETSc functionality.
+          c --------------------------------------------------------
+                module mod_petsc
+                implicit none
+                contains
+                subroutine mod_petsc_dummy()
+                ! dummy stub
+                return
+                end subroutine mod_petsc_dummy
+                end module mod_petsc
+          EOF
+                    fi
 
-          LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
-          echo "LIB_BASE=$LIB_BASE"
+                    LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
+                    echo "LIB_BASE=$LIB_BASE"
 
-          echo "Invoke mingw32-make (RM overridden to rm -f)"
-          mingw32-make \
-            RM="rm -f" \
-            FC="gfortran" \
-            CC="gcc" \
-            FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
-            CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR" \
-            IJS="-I${LIB_BASE}/julian" \
-            IMS="-I/mingw64/include" \
-            IPS="-I/mingw64/include" \
-            LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis" \
-            VERBOSE=1
+                    echo "Invoke mingw32-make (RM overridden to rm -f)"
+                    mingw32-make \
+                      RM="rm -f" \
+                      FC="gfortran" \
+                      CC="gcc" \
+                      FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
+                      CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR" \
+                      IJS="-I${LIB_BASE}/julian" \
+                      IMS="-I/mingw64/include" \
+                      IPS="-I/mingw64/include" \
+                      LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis" \
+                      VERBOSE=1
 
       - name: Package Binary
         shell: bash
