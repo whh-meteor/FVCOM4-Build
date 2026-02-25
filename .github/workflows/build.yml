@@ -33,7 +33,16 @@ jobs:
           export MSYSTEM=MINGW64
           export PATH=/mingw64/bin:$PATH
 
-          cd FVCOM/src
+          echo "Workspace:"
+          pwd
+          ls -la
+
+          # 如果 FVCOM 文件夹存在就进入
+          if [ -d FVCOM/src ]; then
+            cd FVCOM/src
+          else
+            cd src
+          fi
 
           # 生成 make.inc（⚠️ 无任何缩进）
           cat > make.inc <<'EOF'
