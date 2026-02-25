@@ -26,20 +26,12 @@ jobs:
             mingw-w64-x86_64-metis
             dos2unix
 
-      # 🔥 关键：使用 MINGW64 登录 shell
-      - name: Build FVCOM
+     - name: Build FVCOM
         shell: msys2 {0}
         run: |
           set -e
-
-          # 强制进入真正的 MINGW64 环境
-          source /etc/profile
-          export MSYSTEM=MINGW64
-          export PATH=/mingw64/bin:$PATH
-
           cd FVCOM/src
 
-          # 生成最简 make.inc
           cat > make.inc << 'EOF'
           FC = gfortran
           CC = gcc
@@ -53,10 +45,8 @@ jobs:
           LIBS = -L/mingw64/lib -lmetis -lnetcdff -lnetcdf
           EOF
 
-          echo "Normalize line endings"
           dos2unix Makefile || true
 
-          echo "Remove advanced macros"
           sed -i 's/-DMULTIPROCESSOR//g' Makefile
           sed -i 's/-DDATA_ASSIM//g' Makefile
           sed -i 's/-DLIMITED_NO//g' Makefile
@@ -67,17 +57,13 @@ jobs:
           sed -i 's/-DAIR_PRESSURE//g' Makefile
           sed -i 's/-DTVD//g' Makefile
 
-          echo "Remove PETSc"
           sed -i 's/mod_petsc.F//g' Makefile
           sed -i '/mod_petsc\.o/d' Makefile
 
-          echo "Fix rm"
           sed -i 's/\\rm/rm -f/g' Makefile
 
-          echo "Clean"
           mingw32-make clean || true
 
-          echo "Build"
           mingw32-make \
             FC=gfortran \
             CC=gcc \
