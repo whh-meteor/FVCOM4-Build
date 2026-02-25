@@ -32,14 +32,18 @@ jobs:
         run: |
           set -e
 
+          echo "===== ENV CHECK ====="
           echo "MSYSTEM=$MSYSTEM"
           uname -a
           which gfortran
-          ls /mingw64/include
+          which pkg-config
+          ls /mingw64/include | head
 
           cd "$GITHUB_WORKSPACE/FVCOM/src"
 
-          cat > make.inc <<'EOF'
+          echo "===== WRITE CLEAN make.inc ====="
+
+          cat > make.inc <<EOF
           FC = gfortran
           CC = gcc
 
@@ -48,37 +52,37 @@ jobs:
 
           DEFS = -DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5
 
-          INCS = -I./libs/julian -I/mingw64/include
-          LIBS = -L/mingw64/lib -lmetis -lnetcdff -lnetcdf
+          INCS = -I./libs/julian \$(shell pkg-config --cflags netcdf-fortran)
+          LIBS = -L./libs/julian -ljulian -lmetis \$(shell pkg-config --libs netcdf-fortran)
           EOF
 
-          sed -i 's/-DMULTIPROCESSOR//g' Makefile
-          sed -i 's/-DDATA_ASSIM//g' Makefile
-          sed -i 's/-DLIMITED_NO//g' Makefile
-          sed -i 's/-DSEMI_IMPLICIT//g' Makefile
-          sed -i 's/-DGCN//g' Makefile
-          sed -i 's/-DRIVER_FLOAT//g' Makefile
-          sed -i 's/-DMPDATA//g' Makefile
-          sed -i 's/-DAIR_PRESSURE//g' Makefile
-          sed -i 's/-DTVD//g' Makefile
-
-          sed -i 's/mod_petsc.F//g' Makefile
-          sed -i '/mod_petsc\.o/d' Makefile
-          sed -i 's/\\rm/rm -f/g' Makefile
-
+          echo "===== CLEAN ====="
           mingw32-make clean || true
+
+          echo "===== BUILD ====="
           mingw32-make
+
+          echo "===== VERIFY OUTPUT ====="
+          ls -lh fvcom.exe
 
       - name: Package
         shell: msys2 {0}
         run: |
           mkdir -p publish
-          cp FVCOM/src/fvcom.exe publish/ 2>/dev/null || true
-          cp /mingw64/bin/libgfortran-*.dll publish/ 2>/dev/null || true
-          cp /mingw64/bin/libquadmath-*.dll publish/ 2>/dev/null || true
-          cp /mingw64/bin/libnetcdf-*.dll publish/ 2>/dev/null || true
-          cp /mingw64/bin/libnetcdff-*.dll publish/ 2>/dev/null || true
-          cp /mingw64/bin/libmetis-*.dll publish/ 2>/dev/null || true
+
+          cp FVCOM/src/fvcom.exe publish/
+
+          # runtime dlls
+          cp /mingw64/bin/libgfortran-*.dll publish/ || true
+          cp /mingw64/bin/libquadmath-*.dll publish/ || true
+          cp /mingw64/bin/libgcc_s_seh-*.dll publish/ || true
+          cp /mingw64/bin/libwinpthread-*.dll publish/ || true
+          cp /mingw64/bin/libnetcdf-*.dll publish/ || true
+          cp /mingw64/bin/libnetcdff-*.dll publish/ || true
+          cp /mingw64/bin/libmetis-*.dll publish/ || true
+
+          echo "===== PACKAGE CONTENT ====="
+          ls -lh publish
 
       - name: Upload
         uses: actions/upload-artifact@v4
