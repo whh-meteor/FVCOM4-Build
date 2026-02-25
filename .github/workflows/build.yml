@@ -1,4 +1,4 @@
-name: FVCOM_Windows_Stable
+name: FVCOM_Windows_Clean
 
 on:
   push:
@@ -9,10 +9,10 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout Source
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup MSYS2 (MinGW64)
+      - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -23,165 +23,69 @@ jobs:
             mingw-w64-x86_64-make
             mingw-w64-x86_64-netcdf-fortran
             mingw-w64-x86_64-metis
-            mingw-w64-x86_64-msmpi
             dos2unix
-            perl
 
-      - name: Build Julian
+      - name: Build FVCOM
         shell: msys2 {0}
         run: |
           set -e
-          cd "$GITHUB_WORKSPACE/FVCOM/src/libs"
+          cd FVCOM/src
 
-          if [ ! -d julian ]; then
-            ./untar.sh julian || true
-          fi
-
-          if [ -d julian ]; then
-            cd julian
-            gcc -O3 -c *.c || true
-            gfortran -O3 -c *.for || true
-            ar rs libjulian.a *.o || true
-            ls -la libjulian.a || true
-            cd ..
-          else
-            echo "julian directory missing"
-            exit 1
-          fi
-
-      - name: Patch Makefile (remove mod_petsc from MODS safely) and Build FVCOM
-        shell: msys2 {0}
-        run: |
-          set -e
-          cd "$GITHUB_WORKSPACE/FVCOM/src"
-
-          echo "Backing up Makefile -> Makefile.bak"
-          cp Makefile Makefile.bak || true
+          echo "Backup Makefile"
+          cp Makefile Makefile.bak
 
           echo "Normalize line endings"
           dos2unix Makefile || true
 
-          echo "Write safe perl script to rewrite MODS block (remove mod_petsc.F)"
-          cat > rewrite_mods.pl <<'PERL'
-          #!/usr/bin/perl
-          use strict;
-          use warnings;
-          local $/ = undef;
-          my $file = shift or die "Need filename\n";
-          open my $fh, '<', $file or die "open $file: $!";
-          my @lines = <$fh>;
-          close $fh;
-          my $n = scalar @lines;
-          for (my $i=0; $i<$n; $i++){
-            if ($lines[$i] =~ /^\s*MODS\s*=/) {
-              my $start = $i;
-              my @block;
-              push @block, $lines[$i];
-              my $j = $i + 1;
-              # include subsequent indented lines as continuation
-              while ($j < $n && $lines[$j] =~ /^\s/) {
-                push @block, $lines[$j];
-                $j++;
-              }
-              # combine and extract tokens (remove backslash-newline)
-              my $body = join('', @block);
-              $body =~ s/^\s*MODS\s*=\s*//;
-              $body =~ s/\\\s*\n/ /g;   # remove continuation backslashes
-              my @tokens = grep { $_ ne '' } split /\s+/, $body;
-              # remove mod_petsc.F tokens
-              @tokens = grep { $_ ne 'mod_petsc.F' } @tokens;
-              # reformat: put up to 6 tokens per continuation line
-              my $out = "MODS  = ";
-              my $perline = 6;
-              for (my $k=0; $k<@tokens; $k++){
-                if ($k == 0) {
-                  $out .= $tokens[$k];
-                } else {
-                  if ( ($k % $perline) == 0 ) {
-                    $out .= " \\\n\t" . $tokens[$k];
-                  } else {
-                    $out .= "\t" . $tokens[$k];
-                  }
-                }
-              }
-              $out .= "\n";
-              # replace original lines
-              splice(@lines, $start, $j-$start, ($out));
-              # reset indexes
-              $i = $start;
-              $n = scalar @lines;
-            }
-          }
-          open my $out, '>', $file or die "open out $file: $!";
-          print $out @lines;
-          close $out;
-          PERL
+          echo "Remove PETSc and advanced flags"
+          sed -i 's/-DDATA_ASSIM//g' Makefile
+          sed -i 's/-DLIMITED_NO//g' Makefile
+          sed -i 's/-DSEMI_IMPLICIT//g' Makefile
+          sed -i 's/-DGCN//g' Makefile
+          sed -i 's/-DRIVER_FLOAT//g' Makefile
+          sed -i 's/-DMPDATA//g' Makefile
+          sed -i 's/-DAIR_PRESSURE//g' Makefile
+          sed -i 's/-DTVD//g' Makefile
 
-                    echo "Run rewrite_mods.pl on Makefile"
-                    perl rewrite_mods.pl Makefile
+          echo "Remove mod_petsc from module list"
+          sed -i 's/mod_petsc.F//g' Makefile
+          sed -i '/mod_petsc\.o/d' Makefile
 
-                    echo "Remove any explicit mod_petsc.o target"
-                    sed -i '/^mod_petsc\.o[:]/d' Makefile || true
+          echo "Fix \\rm indentation"
+          perl -0777 -i -pe 's/^[ \t]*\\rm[ \t]+/\trm -f /mg; s/\\rm\b/rm -f/g' Makefile
 
-                    echo "Replace leading backslash-escaped rm lines with TAB + 'rm -f ' (safe)"
-                    perl -0777 -i -pe 's/^[ \t]*\\rm[ \t]+/\trm -f /mg; s/\\rm\b/rm -f/g' Makefile
+          echo "Force shell and rm"
+          sed -i '/^SHELL/d' Makefile
+          sed -i '/^RM/d' Makefile
+          sed -i '1i RM = rm -f' Makefile
+          sed -i '1i SHELL = /bin/sh' Makefile
 
-                    echo "Ensure SHELL and RM at top"
-                    sed -i '/^SHELL[ \t]*=/d' Makefile || true
-                    sed -i '/^RM[ \t]*=/d' Makefile || true
-                    sed -i '1i RM = rm -f' Makefile
-                    sed -i '1i SHELL = /bin/sh' Makefile
+          echo "Start compiling"
+          LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
 
-                    echo "=== Makefile head after final patch ==="
-                    nl -ba Makefile | sed -n '1,120p' || true
+          mingw32-make \
+            RM="rm -f" \
+            FC="gfortran" \
+            CC="gcc" \
+            FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
+            CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR -DMETIS_5" \
+            IJS="-I${LIB_BASE}/julian" \
+            IMS="-I/mingw64/include" \
+            IPS="-I/mingw64/include" \
+            LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis"
 
-                    echo "Create a tiny mod_petsc.F stub if Makefile still expects the file"
-                    if [ ! -f mod_petsc.F ]; then
-                      cat > mod_petsc.F <<'EOF'
-          c stub mod_petsc for Windows CI (no PETSc functionality)
-                module mod_petsc
-                implicit none
-                contains
-                subroutine mod_petsc_dummy()
-                return
-                end subroutine mod_petsc_dummy
-                end module mod_petsc
-          EOF
-                    fi
-
-                    LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
-                    echo "LIB_BASE=$LIB_BASE"
-
-                    echo "Run mingw32-make (overriding RM for safety)"
-                    mingw32-make \
-                      RM="rm -f" \
-                      FC="gfortran" \
-                      CC="gcc" \
-                      FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
-                      CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR -DMETIS_5" \
-                      IJS="-I${LIB_BASE}/julian" \
-                      IMS="-I/mingw64/include" \
-                      IPS="-I/mingw64/include" \
-                      LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis"
-
-      - name: Package Binary
+      - name: Package
         shell: bash
         run: |
           mkdir -p publish
-          if [ -f "$GITHUB_WORKSPACE/FVCOM/src/fvcom.exe" ]; then
-            cp "$GITHUB_WORKSPACE/FVCOM/src/fvcom.exe" publish/
-          else
-            echo "fvcom.exe not found"
-          fi
-
+          cp FVCOM/src/fvcom.exe publish/ || true
           cp /mingw64/bin/libgfortran-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libquadmath-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libnetcdf-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libnetcdff-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libmetis-*.dll publish/ 2>/dev/null || true
-          cp /mingw64/bin/msmpi.dll publish/ 2>/dev/null || true
 
-      - name: Upload Windows Build
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: FVCOM-Windows
