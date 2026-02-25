@@ -1,4 +1,4 @@
-name: FVCOM_Windows_Clean_Final
+name: FVCOM_Windows_Final_Stable
 
 on:
   push:
@@ -24,37 +24,19 @@ jobs:
             mingw-w64-x86_64-netcdf
             mingw-w64-x86_64-netcdf-fortran
             mingw-w64-x86_64-metis
-            dos2unix
+            mingw-w64-x86_64-dos2unix
 
       - name: Build FVCOM
-        shell: msys2 -c "{0}"
-        env:
-          MSYSTEM: MINGW64
+        shell: msys2 {0}
         run: |
+          set -e
+
           echo "MSYSTEM=$MSYSTEM"
           uname -a
           which gfortran
-          ls /mingw64/include || true
-          set -e
-          export MSYSTEM=MINGW64
-          export PATH=/mingw64/bin:$PATH
+          ls /mingw64/include
 
-          echo "Go to GitHub workspace"
-          cd "$(cygpath -u "$GITHUB_WORKSPACE")"
-
-          echo "Current directory:"
-          pwd
-          ls -la
-
-          # 如果仓库里有 FVCOM 目录
-          if [ -d FVCOM/src ]; then
-            cd FVCOM/src
-          else
-            cd src
-          fi
-
-          echo "Entered source dir:"
-          pwd
+          cd "$GITHUB_WORKSPACE/FVCOM/src"
 
           cat > make.inc <<'EOF'
           FC = gfortran
@@ -83,27 +65,16 @@ jobs:
 
           sed -i 's/mod_petsc.F//g' Makefile
           sed -i '/mod_petsc\.o/d' Makefile
-
           sed -i 's/\\rm/rm -f/g' Makefile
 
           mingw32-make clean || true
           mingw32-make
 
       - name: Package
-        shell: msys2 -c "{0}"
-        env:
-          MSYSTEM: MINGW64
+        shell: msys2 {0}
         run: |
-          echo "MSYSTEM=$MSYSTEM"
-          uname -a
-          which gfortran
-          ls /mingw64/include || true
-          export MSYSTEM=MINGW64
-          export PATH=/mingw64/bin:$PATH
-          cd "$(cygpath -u "$GITHUB_WORKSPACE")"
-
           mkdir -p publish
-          cp FVCOM/src/fvcom.exe publish/ 2>/dev/null || cp src/fvcom.exe publish/ || true
+          cp FVCOM/src/fvcom.exe publish/ 2>/dev/null || true
           cp /mingw64/bin/libgfortran-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libquadmath-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libnetcdf-*.dll publish/ 2>/dev/null || true
