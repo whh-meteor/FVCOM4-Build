@@ -38,17 +38,6 @@ jobs:
 
           cd "$GITHUB_WORKSPACE/FVCOM/src"
 
-          echo "===== FIND NETCDF MODULE PATH ====="
-          NETCDF_MOD_PATH=$(find /mingw64 -name "netcdf.mod" 2>/dev/null | head -1)
-          if [ -n "$NETCDF_MOD_PATH" ]; then
-            NETCDF_MOD_DIR=$(dirname "$NETCDF_MOD_PATH")
-            echo "Found netcdf.mod at: $NETCDF_MOD_PATH"
-            echo "Module directory: $NETCDF_MOD_DIR"
-          else
-            NETCDF_MOD_DIR="/mingw64/lib"
-            echo "netcdf.mod not found, using default: $NETCDF_MOD_DIR"
-          fi
-
           echo "===== WRITE make.inc ====="
 
           cat > make.inc <<'EOF'
@@ -65,12 +54,10 @@ jobs:
           LIBS = -L./libs/julian -ljulian -lmetis -lnetcdff -lnetcdf
           EOF
 
-          echo "INCS = -I./libs/julian -I$NETCDF_MOD_DIR" >> make.inc
-
           cat make.inc
 
-          mingw32-make clean || true
-          mingw32-make
+          make clean || true
+          make
 
           ls -lh fvcom.exe
 
