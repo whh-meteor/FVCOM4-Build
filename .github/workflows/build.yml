@@ -35,8 +35,8 @@ jobs:
         run: |
           cd FVCOM/src/libs
           ./untar.sh julian
-          cd julian
-          mingw32-make CC="gcc" FC="gfortran" AR="ar rs"
+          cd FVCOM/src/libs
+          mingw32-make CC="gcc" FC="gfortran"
 
       # =============================
       # 2️⃣  编译 FVCOM 主程序
