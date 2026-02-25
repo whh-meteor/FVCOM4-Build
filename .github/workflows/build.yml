@@ -53,6 +53,15 @@ jobs:
       - name: Build FVCOM
         shell: msys2 {0}
         run: |
+          cd "$GITHUB_WORKSPACE/FVCOM/src"
+
+          # 仅在 MODS 定义块中删除 mod_petsc.F （安全做法）
+          perl -0777 -i -pe '
+            s/(MODS\s*=\s*)(.*?)(\n\n|\n#|\n\n#|$)/$1 . ( $2 =~ s/\bmod_petsc\.F\b//gr ) . $3/ges
+          ' Makefile
+
+          # 打印检查
+          nl -ba Makefile | sed -n "1,120p"
           set -e
           cd "$GITHUB_WORKSPACE/FVCOM/src"
 
