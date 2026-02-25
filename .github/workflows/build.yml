@@ -68,7 +68,7 @@ jobs:
             FC="gfortran" \
             CC="gcc" \
             FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
-            CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR -DMETIS_5" \
+            CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5" \
             IJS="-I${LIB_BASE}/julian" \
             IMS="-I/mingw64/include" \
             IPS="-I/mingw64/include" \
