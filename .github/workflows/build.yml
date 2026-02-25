@@ -1,13 +1,13 @@
 name: FVCOM_Windows_Build
 
-on: 
+on:
   push:
   workflow_dispatch:
 
 jobs:
   build_job:
     runs-on: windows-latest
-    
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -26,26 +26,78 @@ jobs:
             mingw-w64-x86_64-msmpi
             mingw-w64-x86_64-proj
             python3
+      # --------------------------
+      # 0. Sanity: print workspace (debug)
+      # --------------------------
+      - name: Debug: show workspace
+        shell: msys2 {0}
+        run: |
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          ls -la "$GITHUB_WORKSPACE" || true
 
-      # =============================
-      # 1️⃣ 编译 julian
-      # =============================
+      # --------------------------
+      # 1. Build julian (libs)
+      # --------------------------
       - name: Build Julian Library
         shell: msys2 {0}
         run: |
+          # use absolute path to avoid path confusion between steps
           cd "$GITHUB_WORKSPACE/FVCOM/src/libs"
-          mingw32-make CC="gcc" FC="gfortran"
+          # ensure julian is extracted (untar.sh should exist in libs)
+          if [ ! -d julian ]; then ./untar.sh julian || true; fi
+          # Build julian using parent-level commands (do not invoke julian's own Makefile)
+          cd julian
+          gcc -O3 -c *.c || true
+          gfortran -O3 -c *.for || true
+          ar rs libjulian.a *.o || true
+          ls -la libjulian.a || true
+          cd ..
 
-      # =============================
-      # 2️⃣ 编译 FVCOM 主程序
-      # =============================
-      - name: Build FVCOM
+      # --------------------------
+      # 2. Patch top-level Makefile(s) & Build FVCOM
+      # --------------------------
+      - name: Patch Makefiles and Build FVCOM
         shell: msys2 {0}
         run: |
+          set -e
+
+          # go to source
           cd "$GITHUB_WORKSPACE/FVCOM/src"
 
-          LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
+          echo ">>> Working directory: $(pwd)"
+          echo ">>> Show top-level files:"
+          ls -la . | sed -n '1,200p'
 
+          # 1) Ensure POSIX shell and RM variable at top of Makefile
+          if [ -f Makefile ]; then
+            # remove existing SHELL or RM definitions to avoid duplicates
+            sed -i '/^SHELL[ 	]*=/d' Makefile || true
+            sed -i '/^RM[ 	]*=/d' Makefile || true
+            # insert standard lines at file top
+            sed -i '1i RM = rm -f' Makefile
+            sed -i '1i SHELL = /bin/sh' Makefile
+            echo "Patched Makefile header (SHELL, RM)."
+          else
+            echo "WARNING: Makefile not found in src (expected $GITHUB_WORKSPACE/FVCOM/src/Makefile)."
+          fi
+
+          # 2) Replace any occurrences of backslash-escaped rm (e.g. \rm mod_prec.f90) with $(RM)
+          #    Operate on Makefile and any sub-makefiles (safe global replacement)
+          find . -maxdepth 3 -type f \( -name 'Makefile' -o -name 'makefile' -o -name 'make.inc' \) -print0 \
+            | xargs -0 -n1 perl -0777 -i -pe 's/\\rm\b/$(RM)/g; s/\\rm[ \t]+/$(RM) /g;'
+
+          echo "Replaced '\\rm' with '$(RM)' in Makefile(s)."
+
+          # 3) Print top portion of Makefile to confirm patch (for CI log)
+          echo "=== Makefile head after patch ==="
+          nl -ba Makefile | sed -n '1,120p' || true
+
+          # 4) Now run make with explicit include overrides to system headers
+          #    Ensure IMS and IPS override any references to src/libs/metis/include or proj/include
+          LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
+          echo "LIB_BASE=$LIB_BASE"
+
+          # Call mingw32-make and explicitly override IMS/IPS to MSYS2 system include
           mingw32-make \
             FC="gfortran" \
             CC="gcc" \
@@ -54,16 +106,21 @@ jobs:
             IJS="-I$LIB_BASE/julian" \
             IMS="-I/mingw64/include" \
             IPS="-I/mingw64/include" \
-            LJS="-L$LIB_BASE/julian -ljulian -L/mingw64/lib -lmetis"
+            LJS="-L$LIB_BASE/julian -ljulian -L/mingw64/lib -lmetis" \
+            VERBOSE=1
 
-      # =============================
-      # 3️⃣ 打包
-      # =============================
+      # --------------------------
+      # 3. Prepare Artifacts
+      # --------------------------
       - name: Prepare Artifacts
         shell: bash
         run: |
           mkdir -p publish
-          cp FVCOM/src/fvcom.exe publish/ || echo "fvcom.exe not found"
+          if [ -f "$GITHUB_WORKSPACE/FVCOM/src/fvcom.exe" ]; then
+            cp "$GITHUB_WORKSPACE/FVCOM/src/fvcom.exe" publish/
+          else
+            echo "fvcom.exe not found at $GITHUB_WORKSPACE/FVCOM/src/fvcom.exe"
+          fi
 
           cp /mingw64/bin/libnetcdff-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libnetcdf-*.dll publish/ 2>/dev/null || true
