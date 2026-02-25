@@ -30,7 +30,21 @@ jobs:
         run: |
           set -e
           cd FVCOM/src
+          echo "Patch make.inc (real macro source)"
 
+          dos2unix make.inc || true
+
+          sed -i 's/-DMULTIPROCESSOR//g' make.inc
+          sed -i 's/-DDATA_ASSIM//g' make.inc
+          sed -i 's/-DLIMITED_NO//g' make.inc
+          sed -i 's/-DSEMI_IMPLICIT//g' make.inc
+          sed -i 's/-DGCN//g' make.inc
+          sed -i 's/-DRIVER_FLOAT//g' make.inc
+          sed -i 's/-DMPDATA//g' make.inc
+          sed -i 's/-DAIR_PRESSURE//g' make.inc
+          sed -i 's/-DTVD//g' make.inc
+
+          
           echo "Backup Makefile"
           cp Makefile Makefile.bak
 
