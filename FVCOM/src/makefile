@@ -43,12 +43,12 @@ include ./make.inc
 .F.o:
 	$(CPP) $(CPPARGS) $(if $(PETSC_FC_INCLUDES), $(PETSC_FC_INCLUDES) $(INCS)) $*.F > $*.f90
 	$(FC)  -c $(FFLAGS) $(INCS) $*.f90
-	\rm $*.f90
+	$(RM) $*.f90
 
 .F90.o:
 	$(CPP) $(CPPFLAGS) $(CPPDEFS) $(INCLDIR) $< > $*.f  
 	$(FC) -c $(FFLAGS) $(FIXEDFLAGS) $(INCS) $(INCLDIR) $*.f  
-	\rm $*.f90
+	$(RM) $*.f90
 
 
 #--------------------------------------------------------------------------

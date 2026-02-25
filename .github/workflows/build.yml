@@ -43,14 +43,15 @@ jobs:
           cat > make.inc <<'EOF'
           FC = gfortran
           CC = gcc
+          RM = rm -f
 
           FFLAGS = -O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check
           CFLAGS = -O3
 
           DEFS = -DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5
 
-          INCS = -I./libs/julian -I/mingw64/include
-          LIBS = -L./libs/julian -ljulian -L/mingw64/lib -lmetis -lnetcdff -lnetcdf
+          INCS = -I./libs/julian
+          LIBS = -L./libs/julian -ljulian -lmetis -lnetcdff -lnetcdf
           EOF
 
           cat make.inc
