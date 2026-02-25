@@ -16,6 +16,10 @@ all:
 	
 	# 2. 编译 Julian (FVCOM 核心时间库)
 	@echo "Building Julian..."
+
+	# 先修复 julian Makefile（删除 $(LIBRARY) 执行行）
+	sed -i 's/^\s*\$(LIBRARY)\s*$$//g' julian/makefile
+
 	cd julian && $(MAKE) CC="$(CC)" FC="$(FC)" AR="ar rs"
 
 	# 3. 编译 Metis
