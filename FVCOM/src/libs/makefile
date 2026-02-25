@@ -1,12 +1,12 @@
-#----------- FVCOM/src/libs/Makefile (MSYS2 Simplified Version) --------
+#----------- FVCOM/src/libs/Makefile (Windows MSYS2 Stable Version) --------
 
 SHELL = /bin/sh
+RM    = rm -f
+
 include ../make.inc
 
 # Windows/MSYS2 版本只编译 julian
 PACKAGES = julian
-
-MYINSTALLDIR = $(INSTALLDIR)
 
 all:
 	@echo "===================================="
@@ -25,13 +25,13 @@ all:
 
 	@echo "Julian build complete."
 	@echo ""
-	@echo "Metis / Proj / NetCDF will use MSYS2 system libraries."
+	@echo "Metis / Proj / NetCDF use MSYS2 system libraries."
 	@echo "Library build finished."
 
 clean:
 	@if [ -d julian ]; then \
-		cd julian && rm -f *.o *.a ; \
+		cd julian && $(RM) *.o *.a ; \
 	fi
 
 clobber:
-	rm -rf julian
+	$(RM) -r julian

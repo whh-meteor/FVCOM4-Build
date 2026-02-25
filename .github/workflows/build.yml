@@ -28,7 +28,7 @@ jobs:
             python3
 
       # =============================
-      # 1️⃣  只编译 julian
+      # 1️⃣ 编译 julian
       # =============================
       - name: Build Julian Library
         shell: msys2 {0}
@@ -37,7 +37,7 @@ jobs:
           mingw32-make CC="gcc" FC="gfortran"
 
       # =============================
-      # 2️⃣  编译 FVCOM 主程序
+      # 2️⃣ 编译 FVCOM 主程序
       # =============================
       - name: Build FVCOM
         shell: msys2 {0}
@@ -57,13 +57,13 @@ jobs:
             LJS="-L$LIB_BASE/julian -ljulian -L/mingw64/lib -lmetis"
 
       # =============================
-      # 3️⃣  打包
+      # 3️⃣ 打包
       # =============================
       - name: Prepare Artifacts
         shell: bash
         run: |
           mkdir -p publish
-          [ -f FVCOM/src/fvcom.exe ] && cp FVCOM/src/fvcom.exe publish/ || echo "fvcom.exe not found"
+          cp FVCOM/src/fvcom.exe publish/ || echo "fvcom.exe not found"
 
           cp /mingw64/bin/libnetcdff-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libnetcdf-*.dll publish/ 2>/dev/null || true
