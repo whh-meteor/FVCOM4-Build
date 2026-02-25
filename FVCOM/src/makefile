@@ -50,6 +50,9 @@ include ./make.inc
 	$(FC) -c $(FFLAGS) $(FIXEDFLAGS) $(INCS) $(INCLDIR) $*.f  
 	$(RM) $*.f90
 
+.f90.o:
+	$(FC) -c $(FFLAGS) $(INCS) $*.f90
+
 
 #--------------------------------------------------------------------------
 #  FVCOM Source Code.
