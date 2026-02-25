@@ -1,127 +1,113 @@
-name: FVCOM_Windows_Build
+name: FVCOM_Windows_Minimal
 
 on:
   push:
   workflow_dispatch:
 
 jobs:
-  build_job:
+  build:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout Code
+      # ============================================
+      # 1️⃣ Checkout
+      # ============================================
+      - name: Checkout Source
         uses: actions/checkout@v4
 
+      # ============================================
+      # 2️⃣ Setup MSYS2 (MinGW64 toolchain)
+      # ============================================
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
           update: true
           install: >-
-            mingw-w64-x86_64-gcc-fortran
             mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-gcc-fortran
             mingw-w64-x86_64-make
             mingw-w64-x86_64-netcdf-fortran
             mingw-w64-x86_64-metis
             mingw-w64-x86_64-msmpi
-            mingw-w64-x86_64-proj
             dos2unix
-            perl
 
-      # 1️⃣ Build julian library (small, safe)
-      - name: Build Julian Library
+      # ============================================
+      # 3️⃣ Build Julian Library
+      # ============================================
+      - name: Build Julian
         shell: msys2 {0}
         run: |
+          set -e
           cd "$GITHUB_WORKSPACE/FVCOM/src/libs"
 
           if [ ! -d julian ]; then
-            ./untar.sh julian || true
+            ./untar.sh julian
           fi
 
-          if [ -d julian ]; then
-            cd julian
-            gcc -O3 -c *.c || true
-            gfortran -O3 -c *.for || true
-            ar rs libjulian.a *.o || true
-            ls -la libjulian.a || true
-            cd ..
-          else
-            echo "julian directory missing"
-            exit 1
-          fi
+          cd julian
+          gcc -O3 -c *.c
+          gfortran -O3 -c *.for
+          ar rs libjulian.a *.o
 
-      # 2️⃣ Patch Makefile safely and build FVCOM
-      - name: Patch Makefile (remove PETSc) and Build FVCOM
+      # ============================================
+      # 4️⃣ Build FVCOM (NO PETSc, NO Makefile patch)
+      # ============================================
+      - name: Build FVCOM
         shell: msys2 {0}
         run: |
           set -e
           cd "$GITHUB_WORKSPACE/FVCOM/src"
 
-          echo "Backing up Makefile -> Makefile.bak"
-          cp Makefile Makefile.bak || true
+          # 🔥 只删除 PETSc 文件
+          rm -f mod_petsc.F mod_petsc.o mod_petsc.f90 || true
 
-          echo "1) Normalize line endings (dos2unix)"
+          # Windows 行尾修复（安全）
           dos2unix Makefile || true
 
-          echo "2) Remove mod_petsc tokens (safe sed)"
-          # remove standalone token occurrences (possibly followed by continuation backslash)
-          sed -i -e 's/\<mod_petsc\.F\>[[:space:]]*\\\?//g' -e 's/\<mod_petsc\.o\>[[:space:]]*\\\?//g' Makefile || true
-
-          echo "3) Remove any explicit target lines for mod_petsc.o"
-          sed -i '/^mod_petsc\.o[:]/d' Makefile || true
-
-          echo "4) Remove any lines that contain only a backslash continuation (leftover)"
-          sed -i '/^[[:space:]]*\\[[:space:]]*$/d' Makefile || true
-
-          echo "5) Ensure recipe rm lines keep a leading TAB"
-          # Convert lines that begin with optional spaces followed by 'rm -f' to have a real tab at start
-          perl -0777 -i -pe 's/^[ \t]*rm -f/\trm -f/mg' Makefile
-
-          echo "6) Ensure SHELL and RM at top (non-destructive)"
-          sed -i '/^SHELL[ \t]*=/d' Makefile || true
-          sed -i '/^RM[ \t]*=/d' Makefile || true
-          sed -i '1i RM = rm -f' Makefile
-          sed -i '1i SHELL = /bin/sh' Makefile
-
-          echo "=== Makefile head after patch ==="
-          nl -ba Makefile | sed -n '1,120p' || true
-
           LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
-          echo "LIB_BASE=$LIB_BASE"
 
-          echo "Running mingw32-make..."
+          echo "==== Start Build ===="
+
           mingw32-make \
-            RM="rm -f" \
             FC="gfortran" \
             CC="gcc" \
+            RM="rm -f" \
             FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
             CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR" \
             IJS="-I${LIB_BASE}/julian" \
             IMS="-I/mingw64/include" \
             IPS="-I/mingw64/include" \
-            LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis" \
-            VERBOSE=1
+            LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis"
 
-      # 3️⃣ Package artifacts
-      - name: Prepare Artifacts
+      # ============================================
+      # 5️⃣ Package EXE + Required DLLs
+      # ============================================
+      - name: Package Binary
         shell: bash
         run: |
           mkdir -p publish
-          if [ -f "$GITHUB_WORKSPACE/FVCOM/src/fvcom.exe" ]; then
-            cp "$GITHUB_WORKSPACE/FVCOM/src/fvcom.exe" publish/
+
+          if [ -f FVCOM/src/fvcom.exe ]; then
+            cp FVCOM/src/fvcom.exe publish/
           else
             echo "fvcom.exe not found"
+            exit 1
           fi
 
-          cp /mingw64/bin/libnetcdff-*.dll publish/ 2>/dev/null || true
-          cp /mingw64/bin/libnetcdf-*.dll publish/ 2>/dev/null || true
-          cp /mingw64/bin/libmetis-*.dll publish/ 2>/dev/null || true
+          # runtime DLLs
           cp /mingw64/bin/libgfortran-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libquadmath-*.dll publish/ 2>/dev/null || true
+          cp /mingw64/bin/libnetcdf-*.dll publish/ 2>/dev/null || true
+          cp /mingw64/bin/libnetcdff-*.dll publish/ 2>/dev/null || true
+          cp /mingw64/bin/libmetis-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/msmpi.dll publish/ 2>/dev/null || true
 
-      - name: Upload EXE Package
+      # ============================================
+      # 6️⃣ Upload Artifact
+      # ============================================
+      - name: Upload Windows Build
         uses: actions/upload-artifact@v4
         with:
-          name: FVCOM4-Windows-Binaries
+          name: FVCOM-Windows-Minimal
           path: publish/
