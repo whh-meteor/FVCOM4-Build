@@ -26,7 +26,7 @@ jobs:
             mingw-w64-x86_64-metis
             dos2unix
 
-     - name: Build FVCOM
+      - name: Build FVCOM
         shell: msys2 {0}
         run: |
           set -e
