@@ -25,6 +25,7 @@ jobs:
             mingw-w64-x86_64-netcdf
             mingw-w64-x86_64-netcdf-fortran
             mingw-w64-x86_64-metis
+            mingw-w64-x86_64-pkgconf
 
       - name: Build FVCOM
         shell: msys2 {0}
