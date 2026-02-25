@@ -51,29 +51,56 @@ jobs:
       - name: Build FVCOM
         shell: msys2 {0}
         run: |
+        # ---- begin paste into workflow Build FVCOM run: ----
           set -e
           cd "$GITHUB_WORKSPACE/FVCOM/src"
 
-          # 强制使用 POSIX shell
-          sed -i '/^SHELL[ 	]*=/d' Makefile || true
-          sed -i '/^RM[ 	]*=/d' Makefile || true
-          sed -i '1i RM = rm -f' Makefile
-          sed -i '1i SHELL = /bin/sh' Makefile
+          echo "Working dir: $(pwd)"
+          echo "Files in src:"
+          ls -la | sed -n '1,200p' || true
 
-          # 修复 \rm
-          perl -0777 -i -pe 's/\\rm\b/$(RM)/g' Makefile
+          # 1) 规范化 line endings 并仅对 Makefile / make.inc 做文本安全处理
+          find . -maxdepth 2 -type f \( -name 'Makefile' -o -name 'makefile' -o -name 'make.inc' \) -print0 \
+            | xargs -0 -n1 -I{} sh -c 'echo "dos2unix {}"; dos2unix "{}" >/dev/null 2>&1 || true'
 
+          # 2) 只替换以行首开头的反斜线 rm（例如 "\rm mod_prec.f90"）
+          #    这是最安全的替换：只影响以可见缩进 + \rm 开头的命令行，不触及其它文本/注释
+          find . -maxdepth 2 -type f \( -name 'Makefile' -o -name 'makefile' -o -name 'make.inc' \) -print0 \
+            | xargs -0 -n1 -I{} perl -0777 -i -pe 's/^[\t ]*\\rm[ \t]+/rm -f /mg' '{}'
+
+          # 3) 额外保护：把零散位置的 "\rm" 也换成 "rm -f"（但为避免误改，限制在这些文件里）
+          find . -maxdepth 2 -type f \( -name 'Makefile' -o -name 'makefile' -o -name 'make.inc' \) -print0 \
+            | xargs -0 -n1 -I{} perl -0777 -i -pe 's/\\rm\b/rm -f/g' '{}'
+
+          # 4) 确保 Makefile 顶部有 SHELL 与 RM 定义（避免重复定义）
+          if [ -f Makefile ]; then
+            sed -i '/^SHELL[ 	]*=/d' Makefile || true
+            sed -i '/^RM[ 	]*=/d' Makefile || true
+            sed -i '1i RM = rm -f' Makefile
+            sed -i '1i SHELL = /bin/sh' Makefile
+          fi
+
+          # 5) 打印 Makefile 前 80 行以便在 CI 日志里确认（非常重要）
+          echo "=== Makefile head after patch ==="
+          nl -ba Makefile | sed -n '1,80p' || true
+
+          # 6) 准备 LIB_BASE，并以显式覆盖变量调用 mingw32-make（同时覆盖 RM）
           LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
+          echo "LIB_BASE=$LIB_BASE"
 
+          # 7) 调用 make（显式把 RM 指定为 rm -f，覆盖任何残留）
           mingw32-make \
+            RM="rm -f" \
             FC="gfortran" \
             CC="gcc" \
             FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
             CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR" \
-            IJS="-I$LIB_BASE/julian" \
+            IJS="-I${LIB_BASE}/julian" \
             IMS="-I/mingw64/include" \
             IPS="-I/mingw64/include" \
-            LJS="-L$LIB_BASE/julian -ljulian -L/mingw64/lib -lmetis"
+            LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis" \
+            VERBOSE=1
+          # ---- end paste ---- 
 
       # =============================
       # 3️⃣ Package
