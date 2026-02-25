@@ -34,12 +34,17 @@ jobs:
 
           echo "===== ENV CHECK ====="
           echo "MSYSTEM=$MSYSTEM"
-          uname -a
           which gfortran
           which pkg-config
-          ls /mingw64/include | head
 
           cd "$GITHUB_WORKSPACE/FVCOM/src"
+
+          echo "===== GET NETCDF FLAGS ====="
+          NETCDF_CFLAGS=$(pkg-config --cflags netcdf-fortran)
+          NETCDF_LIBS=$(pkg-config --libs netcdf-fortran)
+
+          echo "NETCDF_CFLAGS=$NETCDF_CFLAGS"
+          echo "NETCDF_LIBS=$NETCDF_LIBS"
 
           echo "===== WRITE CLEAN make.inc ====="
 
@@ -52,27 +57,21 @@ jobs:
 
           DEFS = -DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5
 
-          INCS = -I./libs/julian \$(shell pkg-config --cflags netcdf-fortran)
-          LIBS = -L./libs/julian -ljulian -lmetis \$(shell pkg-config --libs netcdf-fortran)
+          INCS = -I./libs/julian $NETCDF_CFLAGS
+          LIBS = -L./libs/julian -ljulian -lmetis $NETCDF_LIBS
           EOF
 
-          echo "===== CLEAN ====="
           mingw32-make clean || true
-
-          echo "===== BUILD ====="
           mingw32-make
 
-          echo "===== VERIFY OUTPUT ====="
           ls -lh fvcom.exe
 
       - name: Package
         shell: msys2 {0}
         run: |
           mkdir -p publish
-
           cp FVCOM/src/fvcom.exe publish/
 
-          # runtime dlls
           cp /mingw64/bin/libgfortran-*.dll publish/ || true
           cp /mingw64/bin/libquadmath-*.dll publish/ || true
           cp /mingw64/bin/libgcc_s_seh-*.dll publish/ || true
@@ -80,9 +79,6 @@ jobs:
           cp /mingw64/bin/libnetcdf-*.dll publish/ || true
           cp /mingw64/bin/libnetcdff-*.dll publish/ || true
           cp /mingw64/bin/libmetis-*.dll publish/ || true
-
-          echo "===== PACKAGE CONTENT ====="
-          ls -lh publish
 
       - name: Upload
         uses: actions/upload-artifact@v4
