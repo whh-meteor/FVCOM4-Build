@@ -24,7 +24,6 @@ jobs:
             mingw-w64-x86_64-netcdf
             mingw-w64-x86_64-netcdf-fortran
             mingw-w64-x86_64-metis
-            mingw-w64-x86_64-dos2unix
 
       - name: Build FVCOM
         shell: msys2 {0}
@@ -50,8 +49,6 @@ jobs:
           INCS = -I./libs/julian -I/mingw64/include
           LIBS = -L/mingw64/lib -lmetis -lnetcdff -lnetcdf
           EOF
-
-          dos2unix Makefile || true
 
           sed -i 's/-DMULTIPROCESSOR//g' Makefile
           sed -i 's/-DDATA_ASSIM//g' Makefile
