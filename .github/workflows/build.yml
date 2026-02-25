@@ -1,4 +1,4 @@
-name: FVCOM_Windows_Minimal_WithPetscStub
+name: FVCOM_Windows_Stable
 
 on:
   push:
@@ -49,45 +49,100 @@ jobs:
             exit 1
           fi
 
-      - name: Patch Makefile (fix '\rm') and Ensure Petsc stub, then Build FVCOM
+      - name: Patch Makefile (remove mod_petsc from MODS safely) and Build FVCOM
         shell: msys2 {0}
         run: |
           set -e
           cd "$GITHUB_WORKSPACE/FVCOM/src"
 
-          # 备份 Makefile
+          echo "Backing up Makefile -> Makefile.bak"
           cp Makefile Makefile.bak || true
 
-          # 统一行尾（安全）
+          echo "Normalize line endings"
           dos2unix Makefile || true
 
-          # 把以行首出现的 "\rm ..." 替为以 TAB 开头的 "rm -f ..."
-          # 并把其余 "\rm" 替为 "rm -f"（最小安全替换）
-          perl -0777 -i -pe 's/^[ \t]*\\rm[ \t]+/\trm -f /mg; s/\\rm\b/rm -f/g' Makefile
+          echo "Write safe perl script to rewrite MODS block (remove mod_petsc.F)"
+          cat > rewrite_mods.pl <<'PERL'
+          #!/usr/bin/perl
+          use strict;
+          use warnings;
+          local $/ = undef;
+          my $file = shift or die "Need filename\n";
+          open my $fh, '<', $file or die "open $file: $!";
+          my @lines = <$fh>;
+          close $fh;
+          my $n = scalar @lines;
+          for (my $i=0; $i<$n; $i++){
+            if ($lines[$i] =~ /^\s*MODS\s*=/) {
+              my $start = $i;
+              my @block;
+              push @block, $lines[$i];
+              my $j = $i + 1;
+              # include subsequent indented lines as continuation
+              while ($j < $n && $lines[$j] =~ /^\s/) {
+                push @block, $lines[$j];
+                $j++;
+              }
+              # combine and extract tokens (remove backslash-newline)
+              my $body = join('', @block);
+              $body =~ s/^\s*MODS\s*=\s*//;
+              $body =~ s/\\\s*\n/ /g;   # remove continuation backslashes
+              my @tokens = grep { $_ ne '' } split /\s+/, $body;
+              # remove mod_petsc.F tokens
+              @tokens = grep { $_ ne 'mod_petsc.F' } @tokens;
+              # reformat: put up to 6 tokens per continuation line
+              my $out = "MODS  = ";
+              my $perline = 6;
+              for (my $k=0; $k<@tokens; $k++){
+                if ($k == 0) {
+                  $out .= $tokens[$k];
+                } else {
+                  if ( ($k % $perline) == 0 ) {
+                    $out .= " \\\n\t" . $tokens[$k];
+                  } else {
+                    $out .= "\t" . $tokens[$k];
+                  }
+                }
+              }
+              $out .= "\n";
+              # replace original lines
+              splice(@lines, $start, $j-$start, ($out));
+              # reset indexes
+              $i = $start;
+              $n = scalar @lines;
+            }
+          }
+          open my $out, '>', $file or die "open out $file: $!";
+          print $out @lines;
+          close $out;
+          PERL
 
-          # 确保顶部有 SHELL 和 RM 定义
-          sed -i '/^SHELL[ \t]*=/d' Makefile || true
-          sed -i '/^RM[ \t]*=/d' Makefile || true
-          sed -i '1i RM = rm -f' Makefile
-          sed -i '1i SHELL = /bin/sh' Makefile
+                    echo "Run rewrite_mods.pl on Makefile"
+                    perl rewrite_mods.pl Makefile
 
-          echo "=== Makefile head (sanity) ==="
-          nl -ba Makefile | sed -n '1,80p' || true
+                    echo "Remove any explicit mod_petsc.o target"
+                    sed -i '/^mod_petsc\.o[:]/d' Makefile || true
 
-          # —— 关键：如果源里没有 mod_petsc.F，就创建一个小的 stub（不会用到 PETSc）
-          if [ ! -f mod_petsc.F ]; then
-            echo "Creating stub mod_petsc.F to satisfy Makefile (no PETSc on Windows CI)"
-            cat > mod_petsc.F <<'EOF'
-          c --------------------------------------------------------
-          c Stub module mod_petsc for Windows CI builds without PETSc
-          c This provides a minimal module so Makefile rules succeed.
-          c It does NOT implement PETSc functionality.
-          c --------------------------------------------------------
+                    echo "Replace leading backslash-escaped rm lines with TAB + 'rm -f ' (safe)"
+                    perl -0777 -i -pe 's/^[ \t]*\\rm[ \t]+/\trm -f /mg; s/\\rm\b/rm -f/g' Makefile
+
+                    echo "Ensure SHELL and RM at top"
+                    sed -i '/^SHELL[ \t]*=/d' Makefile || true
+                    sed -i '/^RM[ \t]*=/d' Makefile || true
+                    sed -i '1i RM = rm -f' Makefile
+                    sed -i '1i SHELL = /bin/sh' Makefile
+
+                    echo "=== Makefile head after final patch ==="
+                    nl -ba Makefile | sed -n '1,120p' || true
+
+                    echo "Create a tiny mod_petsc.F stub if Makefile still expects the file"
+                    if [ ! -f mod_petsc.F ]; then
+                      cat > mod_petsc.F <<'EOF'
+          c stub mod_petsc for Windows CI (no PETSc functionality)
                 module mod_petsc
                 implicit none
                 contains
                 subroutine mod_petsc_dummy()
-                ! dummy stub
                 return
                 end subroutine mod_petsc_dummy
                 end module mod_petsc
@@ -97,7 +152,7 @@ jobs:
                     LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
                     echo "LIB_BASE=$LIB_BASE"
 
-                    echo "Invoke mingw32-make (RM overridden to rm -f)"
+                    echo "Run mingw32-make (overriding RM for safety)"
                     mingw32-make \
                       RM="rm -f" \
                       FC="gfortran" \
@@ -130,5 +185,5 @@ jobs:
       - name: Upload Windows Build
         uses: actions/upload-artifact@v4
         with:
-          name: FVCOM-Windows-Minimal-Fixed
+          name: FVCOM-Windows
           path: publish/
