@@ -35,20 +35,12 @@ jobs:
           echo "===== ENV CHECK ====="
           echo "MSYSTEM=$MSYSTEM"
           which gfortran
-          which pkg-config
 
           cd "$GITHUB_WORKSPACE/FVCOM/src"
 
-          echo "===== GET NETCDF FLAGS ====="
-          NETCDF_CFLAGS=$(pkg-config --cflags netcdf-fortran)
-          NETCDF_LIBS=$(pkg-config --libs netcdf-fortran)
+          echo "===== WRITE make.inc ====="
 
-          echo "NETCDF_CFLAGS=$NETCDF_CFLAGS"
-          echo "NETCDF_LIBS=$NETCDF_LIBS"
-
-          echo "===== WRITE CLEAN make.inc ====="
-
-          cat > make.inc <<EOF
+          cat > make.inc <<'EOF'
           FC = gfortran
           CC = gcc
 
@@ -57,9 +49,11 @@ jobs:
 
           DEFS = -DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5
 
-          INCS = -I./libs/julian $NETCDF_CFLAGS
-          LIBS = -L./libs/julian -ljulian -lmetis $NETCDF_LIBS
+          INCS = -I./libs/julian -I/mingw64/include
+          LIBS = -L./libs/julian -ljulian -L/mingw64/lib -lmetis -lnetcdff -lnetcdf
           EOF
+
+          cat make.inc
 
           mingw32-make clean || true
           mingw32-make
