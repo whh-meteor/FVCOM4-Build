@@ -51,7 +51,7 @@ jobs:
       - name: Build FVCOM
         shell: msys2 {0}
         run: |
-        # ---- begin paste into workflow Build FVCOM run: ----
+          # ---- begin paste into workflow Build FVCOM run: ----
           set -e
           cd "$GITHUB_WORKSPACE/FVCOM/src"
 
