@@ -26,6 +26,7 @@ jobs:
             mingw-w64-x86_64-netcdf-fortran
             mingw-w64-x86_64-metis
             mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-openmpi
             make
 
       - name: Build FVCOM
@@ -49,10 +50,10 @@ jobs:
           FFLAGS = -O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check
           CFLAGS = -O3
 
-          CPPARGS = -DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5 -DNOPAR
+          CPPARGS = -DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5
 
           INCS = -I./libs/julian -I/mingw64/include
-          LIBS = -L./libs/julian -ljulian -L/mingw64/lib -lmetis -lnetcdff -lnetcdf
+          LIBS = -L./libs/julian -ljulian -L/mingw64/lib -lmetis -lnetcdff -lnetcdf -lmpi
           EOF
 
           cat make.inc
