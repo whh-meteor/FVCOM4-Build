@@ -127,7 +127,11 @@ postFVCOM = postFVCOM_ncnest_reorder.F
 SRCS = $(MODS) $(MODS_W) $(MAIN) $(BIOGEN) $(MAIN_W) 
 
 # object list is composed of free (*.F) and fixed (*.F90) source
-FVCOM_OBJS = $(COBJS:.c=.o) $(SRCS:.F=.o) $(FIXED:.F90=.o) $(SRCS:.f90=.o) 
+FVCOM_OBJS = $(COBJS:.c=.o) $(SRCS:.F=.o) $(FIXED:.F90=.o) $(SRCS:.f90=.o)
+
+# Ensure mpi_constants.o is built before other modules that depend on it
+mod_input.o: mpi_constants.o
+cntrl_prmtrs.o: mpi_constants.o 
 
 
 #--------------------------------------------------------------------------
