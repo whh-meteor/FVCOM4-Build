@@ -49,7 +49,7 @@ jobs:
           FFLAGS = -O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check
           CFLAGS = -O3
 
-          DEFS = -DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5 -DNOPAR
+          CPPARGS = -DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5 -DNOPAR
 
           INCS = -I./libs/julian -I/mingw64/include
           LIBS = -L./libs/julian -ljulian -L/mingw64/lib -lmetis -lnetcdff -lnetcdf
