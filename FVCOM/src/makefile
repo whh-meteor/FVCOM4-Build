@@ -131,7 +131,10 @@ FVCOM_OBJS = $(COBJS:.c=.o) $(SRCS:.F=.o) $(FIXED:.F90=.o) $(SRCS:.f90=.o)
 
 # Ensure mpi_constants.o is built before other modules that depend on it
 mod_input.o: mpi_constants.o
-cntrl_prmtrs.o: mpi_constants.o 
+cntrl_prmtrs.o: mpi_constants.o
+
+# Ensure mod_spherical.o is built before modules that depend on it
+mod_utils.o: mod_spherical.o 
 
 
 #--------------------------------------------------------------------------
