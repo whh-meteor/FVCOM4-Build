@@ -1,5 +1,3 @@
-
-
 name: FVCOM_Windows_Build
 
 on:
@@ -27,7 +25,7 @@ jobs:
             mingw-w64-x86_64-metis
             mingw-w64-x86_64-msmpi
             mingw-w64-x86_64-proj
-            python3
+            dos2unix
 
       # =============================
       # 1️⃣ Build Julian
@@ -48,53 +46,38 @@ jobs:
           cd ..
 
       # =============================
-      # 2️⃣ Patch Makefile & Build FVCOM
+      # 2️⃣ Build FVCOM (安全修复版)
       # =============================
       - name: Build FVCOM
         shell: msys2 {0}
         run: |
           cd "$GITHUB_WORKSPACE/FVCOM/src"
 
-          # 仅在 MODS 定义块中删除 mod_petsc.F （安全做法）
-          perl -0777 -i -pe '
-            s/(MODS\s*=\s*)(.*?)(\n\n|\n#|\n\n#|$)/$1 . ( $2 =~ s/\bmod_petsc\.F\b//gr ) . $3/ges
-          ' Makefile
+          echo "=== Remove PETSc safely ==="
 
-          # 打印检查
-          nl -ba Makefile | sed -n "1,120p"
-          set -e
-          cd "$GITHUB_WORKSPACE/FVCOM/src"
+          # 1 删除 PETSc 源文件
+          rm -f mod_petsc.F mod_petsc.f90 mod_petsc.o 2>/dev/null || true
 
-          echo "=== Fix Makefiles Safely ==="
+          # 2 从 Makefile 中删除 mod_petsc.F
+          sed -i 's/mod_petsc\.F//g' Makefile
 
-          # 1️统一行尾格式
-          find . -maxdepth 2 -type f \( -name 'Makefile' -o -name 'makefile' -o -name 'make.inc' \) -print0 \
-            | xargs -0 -I{} sh -c 'dos2unix "{}" >/dev/null 2>&1 || true'
+          # 3 修复 Windows 行尾
+          dos2unix Makefile || true
 
-          # 2️ 只修复以 \rm 开头的行，并保留 TAB（关键修复）
-          find . -maxdepth 2 -type f \( -name 'Makefile' -o -name 'makefile' -o -name 'make.inc' \) -print0 \
-            | xargs -0 -I{} perl -0777 -i -pe 's/^[\t ]*\\rm[ \t]+/\trm -f /mg' "{}"
+          # 4 修复 \rm 问题
+          sed -i 's/\\rm/rm -f/g' Makefile
 
-          # 3️替换残留的 \rm
-          find . -maxdepth 2 -type f \( -name 'Makefile' -o -name 'makefile' -o -name 'make.inc' \) -print0 \
-            | xargs -0 -I{} perl -0777 -i -pe 's/\\rm\b/rm -f/g' "{}"
+          # 5 确保顶部定义 RM
+          sed -i '/^RM[ 	]*=/d' Makefile || true
+          sed -i '1i RM = rm -f' Makefile
 
-          # 4️确保 SHELL 和 RM 在顶部
-          if [ -f Makefile ]; then
-            sed -i '/^SHELL[ 	]*=/d' Makefile || true
-            sed -i '/^RM[ 	]*=/d' Makefile || true
-            sed -i '1i RM = rm -f' Makefile
-            sed -i '1i SHELL = /bin/sh' Makefile
-          fi
-
-          echo "=== Makefile Head ==="
-          nl -ba Makefile | sed -n '1,50p'
+          echo "=== Makefile head ==="
+          head -20 Makefile
 
           LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
 
           echo "=== Start Build ==="
-          # 删除 mod_petsc.F 并清理多余空格
-          sed -i 's/mod_petsc\.F[ \t]*\\\?//g' Makefile
+
           mingw32-make \
             RM="rm -f" \
             FC="gfortran" \
@@ -104,8 +87,7 @@ jobs:
             IJS="-I${LIB_BASE}/julian" \
             IMS="-I/mingw64/include" \
             IPS="-I/mingw64/include" \
-            LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis" \
-            VERBOSE=1
+            LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis"
 
       # =============================
       # 3️⃣ Package
