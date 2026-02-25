@@ -17,8 +17,18 @@ all:
 	# 2. 编译 Julian (FVCOM 核心时间库)
 	@echo "Building Julian..."
 
-	# 强制删除 Windows 下会被执行的库文件行
-	sed -i '/LIBRARY/d' julian/[Mm]akefile
+	# 先规范化行尾并用更鲁棒的正则删除只包含 $(LIBRARY) 或 libjulian.a 的行，然后打印确认
+	if [ -f julian/Makefile ]; then \
+	  echo "Patching julian/Makefile (normalize CRLF -> LF)"; \
+	  dos2unix julian/Makefile >/dev/null 2>&1 || true; \
+	  # 删除只包含 $(LIBRARY) 的那一行（考虑空白和 CR） \
+	  perl -0777 -i -pe 's/^[ \t]*\$\(\s*LIBRARY\s*\)[ \t\r]*\n//gim' julian/Makefile; \
+	  # 保险起见也删除只包含 libjulian.a 的独立行 \
+	  perl -0777 -i -pe 's/^[ \t]*libjulian\.a[ \t\r]*\n//gim' julian/Makefile; \
+	  echo "=== julian/Makefile (head after patch) ==="; nl -ba julian/Makefile | sed -n '1,80p'; \
+	else \
+	  echo "julian/Makefile not found!"; \
+	fi
 
 	cd julian && $(MAKE) CC="$(CC)" FC="$(FC)" AR="ar rs"
 
