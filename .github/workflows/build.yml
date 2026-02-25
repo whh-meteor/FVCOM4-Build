@@ -19,21 +19,32 @@ jobs:
           update: true
           install: >-
             mingw-w64-x86_64-gcc-fortran
+            mingw-w64-x86_64-gcc
             mingw-w64-x86_64-make
             mingw-w64-x86_64-netcdf-fortran
-            mingw-w64-x86_64-msmpi
             mingw-w64-x86_64-metis
+            mingw-w64-x86_64-msmpi
+            mingw-w64-x86_64-proj
             python3
+
+      # =============================
+      # 1️⃣  只编译 julian
+      # =============================
+      - name: Build Julian Library
+        shell: msys2 {0}
+        run: |
+          cd FVCOM/src/libs
+          ./untar.sh julian
+          cd julian
+          mingw32-make CC="gcc" FC="gfortran" AR="ar rs"
+
+      # =============================
+      # 2️⃣  编译 FVCOM 主程序
+      # =============================
       - name: Build FVCOM
         shell: msys2 {0}
         run: |
           cd FVCOM/src
-
-          cd libs
-          for item in julian metis proj fproj; do ./untar.sh $item; done
-          MY_PWD=$(cygpath -m $(pwd))
-          mingw32-make AR="ar rs" INSTALLDIR="$MY_PWD"
-          cd ..
 
           LIB_BASE=$(cygpath -m "$(pwd)/libs")
 
@@ -43,18 +54,22 @@ jobs:
             FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
             CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR" \
             IJS="-I$LIB_BASE/julian" \
-            IMS="-I$LIB_BASE/metis/include" \
-            IPS="-I$LIB_BASE/proj/include" \
-            LJS="-L$LIB_BASE/julian -ljulian"
- 
+            IMS="-I/mingw64/include" \
+            IPS="-I/mingw64/include" \
+            LJS="-L$LIB_BASE/julian -ljulian -L/mingw64/lib -lmetis"
 
+      # =============================
+      # 3️⃣  打包
+      # =============================
       - name: Prepare Artifacts
         shell: bash
         run: |
           mkdir -p publish
           [ -f FVCOM/src/fvcom.exe ] && cp FVCOM/src/fvcom.exe publish/ || echo "fvcom.exe not found"
+
           cp /mingw64/bin/libnetcdff-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libnetcdf-*.dll publish/ 2>/dev/null || true
+          cp /mingw64/bin/libmetis-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libgfortran-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libquadmath-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/msmpi.dll publish/ 2>/dev/null || true

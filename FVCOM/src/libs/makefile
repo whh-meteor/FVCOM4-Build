@@ -1,46 +1,37 @@
-#----------- FVCOM/src/libs/Makefile - Fixed for MSYS2 ----------------
-SHELL         = /bin/sh
+#----------- FVCOM/src/libs/Makefile (MSYS2 Simplified Version) --------
+
+SHELL = /bin/sh
 include ../make.inc
 
-# 确保所有需要的包都在列表中
-PACKAGES = julian metis proj fproj netcdf
+# Windows/MSYS2 版本只编译 julian
+PACKAGES = julian
 
 MYINSTALLDIR = $(INSTALLDIR)
 
 all:
-	@echo "Starting to build all libraries..."
-	# 1. 循环解压
-	for item in $(PACKAGES); do \
-		if [ ! -d $$item ]; then ./untar.sh $$item; fi; \
-	done
-	
-	# 2. 编译 Julian (FVCOM 核心时间库)
-	@echo "Building Julian..."
+	@echo "===================================="
+	@echo "Building FVCOM Libraries (MSYS2 Mode)"
+	@echo "===================================="
 
+	# 1. 解压 julian（如果不存在）
+	if [ ! -d julian ]; then ./untar.sh julian; fi
+
+	# 2. 编译 Julian
+	@echo "Building Julian..."
 	cd julian && \
-	$(CC) -c -O3 *.c && \
-	$(FC) -c -O3 *.for && \
+	$(CC) -O3 -c *.c && \
+	$(FC) -O3 -c *.for && \
 	ar rs libjulian.a *.o
 
-	# 3. 编译 Metis
-	@echo "Building Metis..."
-	cd metis && $(MAKE) CC="$(CC)" AR="ar rs"
-
-	# 4. 编译 Proj & FProj
-	@echo "Building Proj..."
-	cd proj && ./configure CC="$(CC)" CFLAGS="-O3" --prefix=$(MYINSTALLDIR) --disable-shared
-	cd proj && $(MAKE) install
-	cd fproj && ./configure CC="$(CC)" FC="$(FC)" --with-proj4=$(MYINSTALLDIR) --prefix=$(MYINSTALLDIR)
-	cd fproj && $(MAKE) install
-
-	# 5. 编译 NetCDF (如果系统没安装)
-	@echo "Building NetCDF..."
-	cd netcdf && ./configure CC="$(CC)" FC="$(FC)" --prefix=$(MYINSTALLDIR)
-	cd netcdf && $(MAKE) install
+	@echo "Julian build complete."
+	@echo ""
+	@echo "Metis / Proj / NetCDF will use MSYS2 system libraries."
+	@echo "Library build finished."
 
 clean:
-	for item in $(PACKAGES); do (cd $$item && $(MAKE) clean) || true; done
+	@if [ -d julian ]; then \
+		cd julian && rm -f *.o *.a ; \
+	fi
 
 clobber:
-	for item in $(PACKAGES); do (rm -rf $$item) || true; done
-	rm -rf $(MYINSTALLDIR)/*
+	rm -rf julian
