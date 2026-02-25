@@ -27,12 +27,16 @@ jobs:
             dos2unix
 
       - name: Build FVCOM
-        shell: msys2 {0}
+        shell: C:\msys64\usr\bin\bash.exe -l {0}
         run: |
           set -e
+          export MSYSTEM=MINGW64
+          export PATH=/mingw64/bin:$PATH
+
           cd FVCOM/src
 
-          cat > make.inc << 'EOF'
+          # 生成 make.inc（⚠️ 无任何缩进）
+          cat > make.inc <<'EOF'
           FC = gfortran
           CC = gcc
 
@@ -63,22 +67,11 @@ jobs:
           sed -i 's/\\rm/rm -f/g' Makefile
 
           mingw32-make clean || true
-
-          mingw32-make \
-            FC=gfortran \
-            CC=gcc \
-            FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
-            DEFS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5" \
-            CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5" \
-            IJS="-I./libs/julian" \
-            IMS="-I/mingw64/include" \
-            IPS="-I/mingw64/include" \
-            LJS="-L./libs/julian -ljulian -L/mingw64/lib -lmetis -lnetcdff -lnetcdf"
+          mingw32-make
 
       - name: Package
-        shell: msys2 {0}
+        shell: C:\msys64\usr\bin\bash.exe -l {0}
         run: |
-          source /etc/profile
           export MSYSTEM=MINGW64
           export PATH=/mingw64/bin:$PATH
 
