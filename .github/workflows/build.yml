@@ -33,9 +33,7 @@ jobs:
       - name: Build Julian Library
         shell: msys2 {0}
         run: |
-          cd FVCOM/src/libs
-          ./untar.sh julian
-          cd FVCOM/src/libs
+          cd "$GITHUB_WORKSPACE/FVCOM/src/libs"
           mingw32-make CC="gcc" FC="gfortran"
 
       # =============================
@@ -44,9 +42,9 @@ jobs:
       - name: Build FVCOM
         shell: msys2 {0}
         run: |
-          cd FVCOM/src
+          cd "$GITHUB_WORKSPACE/FVCOM/src"
 
-          LIB_BASE=$(cygpath -m "$(pwd)/libs")
+          LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
 
           mingw32-make \
             FC="gfortran" \
