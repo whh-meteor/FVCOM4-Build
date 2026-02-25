@@ -93,7 +93,8 @@ jobs:
           LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
 
           echo "=== Start Build ==="
-
+          # 删除 mod_petsc.F 并清理多余空格
+          sed -i 's/mod_petsc\.F[ \t]*\\\?//g' Makefile
           mingw32-make \
             RM="rm -f" \
             FC="gfortran" \
