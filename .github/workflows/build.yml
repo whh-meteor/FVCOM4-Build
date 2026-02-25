@@ -51,8 +51,8 @@ jobs:
 
           DEFS = -DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5
 
-          INCS = -I./libs/julian
-          LIBS = -L./libs/julian -ljulian -lmetis -lnetcdff -lnetcdf
+          INCS = -I./libs/julian -I/mingw64/include
+          LIBS = -L./libs/julian -ljulian -L/mingw64/lib -lmetis -lnetcdff -lnetcdf
           EOF
 
           cat make.inc
