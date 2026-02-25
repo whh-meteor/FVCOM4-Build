@@ -33,18 +33,23 @@ jobs:
           export MSYSTEM=MINGW64
           export PATH=/mingw64/bin:$PATH
 
-          echo "Workspace:"
+          echo "Go to GitHub workspace"
+          cd "$(cygpath -u "$GITHUB_WORKSPACE")"
+
+          echo "Current directory:"
           pwd
           ls -la
 
-          # 如果 FVCOM 文件夹存在就进入
+          # 如果仓库里有 FVCOM 目录
           if [ -d FVCOM/src ]; then
             cd FVCOM/src
           else
             cd src
           fi
 
-          # 生成 make.inc（⚠️ 无任何缩进）
+          echo "Entered source dir:"
+          pwd
+
           cat > make.inc <<'EOF'
           FC = gfortran
           CC = gcc
@@ -83,9 +88,10 @@ jobs:
         run: |
           export MSYSTEM=MINGW64
           export PATH=/mingw64/bin:$PATH
+          cd "$(cygpath -u "$GITHUB_WORKSPACE")"
 
           mkdir -p publish
-          cp FVCOM/src/fvcom.exe publish/ || true
+          cp FVCOM/src/fvcom.exe publish/ 2>/dev/null || cp src/fvcom.exe publish/ || true
           cp /mingw64/bin/libgfortran-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libquadmath-*.dll publish/ 2>/dev/null || true
           cp /mingw64/bin/libnetcdf-*.dll publish/ 2>/dev/null || true
