@@ -30,25 +30,19 @@ jobs:
         run: |
           set -e
           cd FVCOM/src
-          echo "Overwrite make.inc for Windows single-core build"
-
           cat > make.inc << 'EOF'
 
-          # Compiler
           FC = gfortran
           CC = gcc
 
-          # Flags
           FFLAGS = -O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check
           CFLAGS = -O3
 
-          # Single-core definitions ONLY
           DEFS = -DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5
 
-          # Include paths
-          INCS = -I/mingw64/include
+          # ✅ 关键：加入 julian 目录
+          INCS = -I./libs/julian -I/mingw64/include
 
-          # Libraries
           LIBS = -L/mingw64/lib -lmetis -lnetcdff -lnetcdf
 
           EOF
