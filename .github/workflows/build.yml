@@ -27,7 +27,7 @@ jobs:
             dos2unix
 
       - name: Build FVCOM
-        shell: C:\msys64\usr\bin\bash.exe -l {0}
+        shell: msys2 {0}
         run: |
           set -e
           export MSYSTEM=MINGW64
@@ -84,7 +84,7 @@ jobs:
           mingw32-make
 
       - name: Package
-        shell: C:\msys64\usr\bin\bash.exe -l {0}
+        shell: msys2 {0}
         run: |
           export MSYSTEM=MINGW64
           export PATH=/mingw64/bin:$PATH
