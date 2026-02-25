@@ -17,8 +17,8 @@ all:
 	# 2. 编译 Julian (FVCOM 核心时间库)
 	@echo "Building Julian..."
 
-	# 先修复 julian Makefile（删除 $(LIBRARY) 执行行）
-	sed -i 's/^\s*\$(LIBRARY)\s*$$//g' julian/makefile
+	# 强制删除 Windows 下会被执行的库文件行
+	sed -i '/LIBRARY/d' julian/[Mm]akefile
 
 	cd julian && $(MAKE) CC="$(CC)" FC="$(FC)" AR="ar rs"
 
