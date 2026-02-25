@@ -21,19 +21,26 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-gcc-fortran
             mingw-w64-x86_64-make
+            mingw-w64-x86_64-netcdf
             mingw-w64-x86_64-netcdf-fortran
             mingw-w64-x86_64-metis
             dos2unix
 
+      # 🔥 关键：使用 MINGW64 登录 shell
       - name: Build FVCOM
         shell: msys2 {0}
-        env:
-          MSYSTEM: MINGW64
         run: |
           set -e
-          cd FVCOM/src
-          cat > make.inc << 'EOF'
 
+          # 强制进入真正的 MINGW64 环境
+          source /etc/profile
+          export MSYSTEM=MINGW64
+          export PATH=/mingw64/bin:$PATH
+
+          cd FVCOM/src
+
+          # 生成最简 make.inc
+          cat > make.inc << 'EOF'
           FC = gfortran
           CC = gcc
 
@@ -42,19 +49,14 @@ jobs:
 
           DEFS = -DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5
 
-          # ✅ 关键：加入 julian 目录
           INCS = -I./libs/julian -I/mingw64/include
-
           LIBS = -L/mingw64/lib -lmetis -lnetcdff -lnetcdf
-
           EOF
-          echo "Backup Makefile"
-          cp Makefile Makefile.bak
 
           echo "Normalize line endings"
           dos2unix Makefile || true
 
-          echo "Force remove ALL advanced macros"
+          echo "Remove advanced macros"
           sed -i 's/-DMULTIPROCESSOR//g' Makefile
           sed -i 's/-DDATA_ASSIM//g' Makefile
           sed -i 's/-DLIMITED_NO//g' Makefile
@@ -65,44 +67,35 @@ jobs:
           sed -i 's/-DAIR_PRESSURE//g' Makefile
           sed -i 's/-DTVD//g' Makefile
 
-          echo "Disable conditional macro blocks"
-          sed -i 's/MULTIPROCESSOR/#MULTIPROCESSOR/g' Makefile
-          sed -i 's/DATA_ASSIM/#DATA_ASSIM/g' Makefile
-
-          echo "Remove PETSc module completely"
+          echo "Remove PETSc"
           sed -i 's/mod_petsc.F//g' Makefile
           sed -i '/mod_petsc\.o/d' Makefile
 
-          echo "Fix \\rm issues"
-          perl -0777 -i -pe 's/^[ \t]*\\rm[ \t]+/\trm -f /mg; s/\\rm\b/rm -f/g' Makefile
+          echo "Fix rm"
+          sed -i 's/\\rm/rm -f/g' Makefile
 
-          echo "Force shell + rm"
-          sed -i '/^SHELL/d' Makefile
-          sed -i '/^RM/d' Makefile
-          sed -i '1i RM = rm -f' Makefile
-          sed -i '1i SHELL = /bin/sh' Makefile
-
-          echo "Clean old objects"
+          echo "Clean"
           mingw32-make clean || true
 
-          echo "Start compiling (single-core mode)"
-          LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
-
+          echo "Build"
           mingw32-make \
-            RM="rm -f" \
-            FC="gfortran" \
-            CC="gcc" \
+            FC=gfortran \
+            CC=gcc \
             FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
             DEFS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5" \
             CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5" \
-            IJS="-I${LIB_BASE}/julian" \
+            IJS="-I./libs/julian" \
             IMS="-I/mingw64/include" \
             IPS="-I/mingw64/include" \
-            LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis"
+            LJS="-L./libs/julian -ljulian -L/mingw64/lib -lmetis -lnetcdff -lnetcdf"
 
       - name: Package
-        shell: bash
+        shell: msys2 {0}
         run: |
+          source /etc/profile
+          export MSYSTEM=MINGW64
+          export PATH=/mingw64/bin:$PATH
+
           mkdir -p publish
           cp FVCOM/src/fvcom.exe publish/ || true
           cp /mingw64/bin/libgfortran-*.dll publish/ 2>/dev/null || true
