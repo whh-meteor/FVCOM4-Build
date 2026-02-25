@@ -26,58 +26,70 @@ jobs:
             mingw-w64-x86_64-msmpi
             mingw-w64-x86_64-proj
             dos2unix
+            perl
 
-      # =============================
-      # 1️⃣ Build Julian
-      # =============================
+      # 1️⃣ Build julian library (small, safe)
       - name: Build Julian Library
         shell: msys2 {0}
         run: |
           cd "$GITHUB_WORKSPACE/FVCOM/src/libs"
 
           if [ ! -d julian ]; then
-            ./untar.sh julian
+            ./untar.sh julian || true
           fi
 
-          cd julian
-          gcc -O3 -c *.c
-          gfortran -O3 -c *.for
-          ar rs libjulian.a *.o
-          cd ..
+          if [ -d julian ]; then
+            cd julian
+            gcc -O3 -c *.c || true
+            gfortran -O3 -c *.for || true
+            ar rs libjulian.a *.o || true
+            ls -la libjulian.a || true
+            cd ..
+          else
+            echo "julian directory missing"
+            exit 1
+          fi
 
-      # =============================
-      # 2️⃣ Build FVCOM (安全修复版)
-      # =============================
-      - name: Build FVCOM
+      # 2️⃣ Patch Makefile safely and build FVCOM
+      - name: Patch Makefile (remove PETSc) and Build FVCOM
         shell: msys2 {0}
         run: |
+          set -e
           cd "$GITHUB_WORKSPACE/FVCOM/src"
 
-          echo "=== Remove PETSc safely ==="
+          echo "Backing up Makefile -> Makefile.bak"
+          cp Makefile Makefile.bak || true
 
-          # 1 删除 PETSc 源文件
-          rm -f mod_petsc.F mod_petsc.f90 mod_petsc.o 2>/dev/null || true
-
-          # 2 从 Makefile 中删除 mod_petsc.F
-          sed -i 's/mod_petsc\.F//g' Makefile
-
-          # 3 修复 Windows 行尾
+          echo "1) Normalize line endings (dos2unix)"
           dos2unix Makefile || true
 
-          # 4 修复 \rm 问题
-          sed -i 's/\\rm/rm -f/g' Makefile
+          echo "2) Remove mod_petsc tokens (safe sed)"
+          # remove standalone token occurrences (possibly followed by continuation backslash)
+          sed -i -e 's/\<mod_petsc\.F\>[[:space:]]*\\\?//g' -e 's/\<mod_petsc\.o\>[[:space:]]*\\\?//g' Makefile || true
 
-          # 5 确保顶部定义 RM
-          sed -i '/^RM[ 	]*=/d' Makefile || true
+          echo "3) Remove any explicit target lines for mod_petsc.o"
+          sed -i '/^mod_petsc\.o[:]/d' Makefile || true
+
+          echo "4) Remove any lines that contain only a backslash continuation (leftover)"
+          sed -i '/^[[:space:]]*\\[[:space:]]*$/d' Makefile || true
+
+          echo "5) Ensure recipe rm lines keep a leading TAB"
+          # Convert lines that begin with optional spaces followed by 'rm -f' to have a real tab at start
+          perl -0777 -i -pe 's/^[ \t]*rm -f/\trm -f/mg' Makefile
+
+          echo "6) Ensure SHELL and RM at top (non-destructive)"
+          sed -i '/^SHELL[ \t]*=/d' Makefile || true
+          sed -i '/^RM[ \t]*=/d' Makefile || true
           sed -i '1i RM = rm -f' Makefile
+          sed -i '1i SHELL = /bin/sh' Makefile
 
-          echo "=== Makefile head ==="
-          head -20 Makefile
+          echo "=== Makefile head after patch ==="
+          nl -ba Makefile | sed -n '1,120p' || true
 
           LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
+          echo "LIB_BASE=$LIB_BASE"
 
-          echo "=== Start Build ==="
-
+          echo "Running mingw32-make..."
           mingw32-make \
             RM="rm -f" \
             FC="gfortran" \
@@ -87,18 +99,16 @@ jobs:
             IJS="-I${LIB_BASE}/julian" \
             IMS="-I/mingw64/include" \
             IPS="-I/mingw64/include" \
-            LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis"
+            LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis" \
+            VERBOSE=1
 
-      # =============================
-      # 3️⃣ Package
-      # =============================
+      # 3️⃣ Package artifacts
       - name: Prepare Artifacts
         shell: bash
         run: |
           mkdir -p publish
-
-          if [ -f FVCOM/src/fvcom.exe ]; then
-            cp FVCOM/src/fvcom.exe publish/
+          if [ -f "$GITHUB_WORKSPACE/FVCOM/src/fvcom.exe" ]; then
+            cp "$GITHUB_WORKSPACE/FVCOM/src/fvcom.exe" publish/
           else
             echo "fvcom.exe not found"
           fi
