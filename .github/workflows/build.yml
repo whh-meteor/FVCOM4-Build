@@ -1,4 +1,4 @@
-name: FVCOM_Windows_Minimal_Fixed
+name: FVCOM_Windows_Minimal_WithPetscStub
 
 on:
   push:
@@ -49,45 +49,55 @@ jobs:
             exit 1
           fi
 
-      - name: Patch Makefile (fix '\rm' → TAB + 'rm -f') and Build FVCOM
+      - name: Patch Makefile (fix '\rm') and Ensure Petsc stub, then Build FVCOM
         shell: msys2 {0}
         run: |
           set -e
           cd "$GITHUB_WORKSPACE/FVCOM/src"
 
-          echo "Backing up Makefile -> Makefile.bak"
+          # 备份 Makefile
           cp Makefile Makefile.bak || true
 
-          echo "Normalize line endings (dos2unix)"
+          # 统一行尾（安全）
           dos2unix Makefile || true
 
-          echo "Patching lines that start with backslash-escaped rm to a recipe with TAB + 'rm -f '..."
-          # Replace lines that begin with optional spaces/tabs then "\rm ..." with a real TAB followed by 'rm -f '
-          # and also replace remaining occurrences of "\rm" with "rm -f"
+          # 把以行首出现的 "\rm ..." 替为以 TAB 开头的 "rm -f ..."
+          # 并把其余 "\rm" 替为 "rm -f"（最小安全替换）
           perl -0777 -i -pe 's/^[ \t]*\\rm[ \t]+/\trm -f /mg; s/\\rm\b/rm -f/g' Makefile
 
-          echo "=== Makefile lines 40-52 after patch (verify that '\\rm' replaced and tab preserved) ==="
-          nl -ba Makefile | sed -n '40,52p' || true
-
-          echo "=== Makefile lines 60-72 (verify MODS continuation) ==="
-          nl -ba Makefile | sed -n '60,72p' || true
-
-          # As extra safety, ensure top-of-file SHELL and RM exist
+          # 确保顶部有 SHELL 和 RM 定义
           sed -i '/^SHELL[ \t]*=/d' Makefile || true
           sed -i '/^RM[ \t]*=/d' Makefile || true
           sed -i '1i RM = rm -f' Makefile
           sed -i '1i SHELL = /bin/sh' Makefile
 
-          echo "Final sanity head:"
+          echo "=== Makefile head (sanity) ==="
           nl -ba Makefile | sed -n '1,80p' || true
+
+          # —— 关键：如果源里没有 mod_petsc.F，就创建一个小的 stub（不会用到 PETSc）
+          if [ ! -f mod_petsc.F ]; then
+            echo "Creating stub mod_petsc.F to satisfy Makefile (no PETSc on Windows CI)"
+            cat > mod_petsc.F <<'EOF'
+c --------------------------------------------------------
+c Stub module mod_petsc for Windows CI builds without PETSc
+c This provides a minimal module so Makefile rules succeed.
+c It does NOT implement PETSc functionality.
+c --------------------------------------------------------
+      module mod_petsc
+      implicit none
+      contains
+      subroutine mod_petsc_dummy()
+      ! dummy stub
+      return
+      end subroutine mod_petsc_dummy
+      end module mod_petsc
+EOF
+          fi
 
           LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
           echo "LIB_BASE=$LIB_BASE"
 
-          echo "Removing optional PETSc source artifacts (if present)"
-          rm -f mod_petsc.F mod_petsc.o mod_petsc.f90 || true
-
-          echo "Invoke mingw32-make (RM overridden to rm -f for extra safety)"
+          echo "Invoke mingw32-make (RM overridden to rm -f)"
           mingw32-make \
             RM="rm -f" \
             FC="gfortran" \
@@ -108,7 +118,6 @@ jobs:
             cp "$GITHUB_WORKSPACE/FVCOM/src/fvcom.exe" publish/
           else
             echo "fvcom.exe not found"
-            # don't fail here so we can inspect logs, but you can change to exit 1 if desired
           fi
 
           cp /mingw64/bin/libgfortran-*.dll publish/ 2>/dev/null || true
