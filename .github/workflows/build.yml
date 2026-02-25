@@ -39,6 +39,9 @@ jobs:
 
           cd "$GITHUB_WORKSPACE/FVCOM/src"
 
+          echo "===== COMPILE MPI CONSTANTS ====="
+          gfortran -c mpi_constants.f90
+
           echo "===== WRITE make.inc ====="
 
           cat > make.inc <<'EOF'

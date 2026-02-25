@@ -57,7 +57,7 @@ include ./make.inc
 
 # Note: Change the order of modules at your own risk!
 
-MODS  = mod_prec.F	sinter.F	mod_types.F	mod_time.F	\
+MODS  = mpi_constants.f90 mod_prec.F	sinter.F	mod_types.F	mod_time.F	\
 	mod_main.F	mod_spherical.F	mod_utils.F	mod_clock.F	\
 	eqs_of_state.F	mod_interp.F	mod_par.F	\
 	mod_par_special.F		mod_ncll.F	mod_nctools.F	\
