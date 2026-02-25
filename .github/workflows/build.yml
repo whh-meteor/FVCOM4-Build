@@ -1,4 +1,4 @@
-name: FVCOM_Windows_Clean
+name: FVCOM_Windows_Clean_Final
 
 on:
   push:
@@ -37,7 +37,8 @@ jobs:
           echo "Normalize line endings"
           dos2unix Makefile || true
 
-          echo "Remove PETSc and advanced flags"
+          echo "Force remove ALL advanced macros"
+          sed -i 's/-DMULTIPROCESSOR//g' Makefile
           sed -i 's/-DDATA_ASSIM//g' Makefile
           sed -i 's/-DLIMITED_NO//g' Makefile
           sed -i 's/-DSEMI_IMPLICIT//g' Makefile
@@ -47,20 +48,27 @@ jobs:
           sed -i 's/-DAIR_PRESSURE//g' Makefile
           sed -i 's/-DTVD//g' Makefile
 
-          echo "Remove mod_petsc from module list"
+          echo "Disable conditional macro blocks"
+          sed -i 's/MULTIPROCESSOR/#MULTIPROCESSOR/g' Makefile
+          sed -i 's/DATA_ASSIM/#DATA_ASSIM/g' Makefile
+
+          echo "Remove PETSc module completely"
           sed -i 's/mod_petsc.F//g' Makefile
           sed -i '/mod_petsc\.o/d' Makefile
 
-          echo "Fix \\rm indentation"
+          echo "Fix \\rm issues"
           perl -0777 -i -pe 's/^[ \t]*\\rm[ \t]+/\trm -f /mg; s/\\rm\b/rm -f/g' Makefile
 
-          echo "Force shell and rm"
+          echo "Force shell + rm"
           sed -i '/^SHELL/d' Makefile
           sed -i '/^RM/d' Makefile
           sed -i '1i RM = rm -f' Makefile
           sed -i '1i SHELL = /bin/sh' Makefile
 
-          echo "Start compiling"
+          echo "Clean old objects"
+          mingw32-make clean || true
+
+          echo "Start compiling (single-core mode)"
           LIB_BASE=$(cygpath -m "$GITHUB_WORKSPACE/FVCOM/src/libs")
 
           mingw32-make \
@@ -68,6 +76,7 @@ jobs:
             FC="gfortran" \
             CC="gcc" \
             FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
+            DEFS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5" \
             CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5" \
             IJS="-I${LIB_BASE}/julian" \
             IMS="-I/mingw64/include" \
