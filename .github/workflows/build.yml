@@ -153,16 +153,16 @@ jobs:
                     echo "LIB_BASE=$LIB_BASE"
 
                     echo "Run mingw32-make (overriding RM for safety)"
-          mingw32-make \
-            RM="rm -f" \
-            FC="gfortran" \
-            CC="gcc" \
-            FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
-            CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR -DMETIS_5" \
-            IJS="-I${LIB_BASE}/julian" \
-            IMS="-I/mingw64/include" \
-            IPS="-I/mingw64/include" \
-            LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis"
+                    mingw32-make \
+                      RM="rm -f" \
+                      FC="gfortran" \
+                      CC="gcc" \
+                      FFLAGS="-O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check" \
+                      CPPFLAGS="-DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMULTIPROCESSOR -DMETIS_5" \
+                      IJS="-I${LIB_BASE}/julian" \
+                      IMS="-I/mingw64/include" \
+                      IPS="-I/mingw64/include" \
+                      LJS="-L${LIB_BASE}/julian -ljulian -L/mingw64/lib -lmetis"
 
       - name: Package Binary
         shell: bash
