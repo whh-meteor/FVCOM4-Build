@@ -134,7 +134,10 @@ mod_input.o: mpi_constants.o
 cntrl_prmtrs.o: mpi_constants.o
 
 # Ensure mod_spherical.o is built before modules that depend on it
-mod_utils.o: mod_spherical.o 
+mod_utils.o: mod_spherical.o
+
+# Ensure mod_par.o is built before modules that depend on it
+mod_nctools.o: mod_par.o 
 
 
 #--------------------------------------------------------------------------
