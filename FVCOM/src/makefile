@@ -129,22 +129,303 @@ SRCS = $(MODS) $(MODS_W) $(MAIN) $(BIOGEN) $(MAIN_W)
 # object list is composed of free (*.F) and fixed (*.F90) source
 FVCOM_OBJS = $(COBJS:.c=.o) $(SRCS:.F=.o) $(FIXED:.F90=.o) $(SRCS:.f90=.o)
 
-# Ensure mpi_constants.o is built before other modules that depend on it
-mod_input.o: mpi_constants.o
-cntrl_prmtrs.o: mpi_constants.o
+# Explicit module dependencies based on MODS order and actual USE statements
+# These ensure modules are compiled in the correct order
 
-# Ensure mod_spherical.o is built before modules that depend on it
-mod_utils.o: mod_spherical.o
+# mpi_constants.f90 - no dependencies (base module)
 
-# Ensure mod_par.o is built before modules that depend on it
-mod_nctools.o: mod_par.o
+# mod_prec.F - no dependencies (base module)
 
-# Ensure mod_types.o is built before modules that depend on it
-mod_par.o: mod_types.o
+# sinter.F - depends on mod_prec
+sinter.o: mod_prec.o
+
+# mod_types.F - depends on mod_prec
 mod_types.o: mod_prec.o
 
-# Ensure mod_nctools.o is built before modules that depend on it
-mod_input.o: mod_nctools.o 
+# mod_time.F - depends on mod_prec
+mod_time.o: mod_prec.o
+
+# mod_main.F - depends on mod_types, mod_time, mod_prec
+mod_main.o: mod_types.o mod_time.o mod_prec.o
+
+# mod_spherical.F - depends on mod_main, mod_prec
+mod_spherical.o: mod_main.o mod_prec.o
+
+# mod_utils.F - depends on mod_main, mod_spherical, mod_prec
+mod_utils.o: mod_main.o mod_spherical.o mod_prec.o
+
+# mod_clock.F - depends on mod_utils, mod_main, mod_time, mod_prec
+mod_clock.o: mod_utils.o mod_main.o mod_time.o mod_prec.o
+
+# eqs_of_state.F - depends on mod_utils, mod_main, mod_prec
+eqs_of_state.o: mod_utils.o mod_main.o mod_prec.o
+
+# mod_interp.F - depends on mod_main, mod_spherical, mod_clock, mod_utils, mod_prec
+mod_interp.o: mod_main.o mod_spherical.o mod_clock.o mod_utils.o mod_prec.o
+
+# mod_par.F - depends on mod_main, mod_time, mod_utils, mod_types, mod_prec
+mod_par.o: mod_main.o mod_time.o mod_utils.o mod_types.o mod_prec.o
+
+# mod_par_special.F - depends on mod_main, mod_time, mod_utils, mod_types, mod_prec
+mod_par_special.o: mod_main.o mod_time.o mod_utils.o mod_types.o mod_prec.o
+
+# mod_ncll.F - depends on mod_main, mod_interp, mod_utils, mod_time, mod_prec
+mod_ncll.o: mod_main.o mod_interp.o mod_utils.o mod_time.o mod_prec.o
+
+# mod_nctools.F - depends on mod_main, mod_par_special, mod_ncll, mod_prec
+mod_nctools.o: mod_main.o mod_par_special.o mod_ncll.o mod_prec.o
+
+# mod_wd.F - depends on mod_par_special, mod_main, mod_prec
+mod_wd.o: mod_par_special.o mod_main.o mod_prec.o
+
+# mod_sng.F - depends on mod_utils, mod_prec
+mod_sng.o: mod_utils.o mod_prec.o
+
+# mod_heatflux.F - depends on mod_main, mod_utils, mod_prec
+mod_heatflux.o: mod_main.o mod_utils.o mod_prec.o
+
+# mod_solar.F - depends on mod_main, mod_utils, mod_prec
+mod_solar.o: mod_main.o mod_utils.o mod_prec.o
+
+# mod_bulk.F - depends on mod_main_wave, mod_par_special, mod_main, mod_prec
+mod_bulk.o: mod_main_wave.o mod_par_special.o mod_main.o mod_prec.o
+
+# mod_input.F - depends on mod_main, mod_solar, mod_heatflux, mod_sng, mod_utils, mod_nctools, mod_prec, mpi_constants
+mod_input.o: mod_main.o mod_solar.o mod_heatflux.o mod_sng.o mod_utils.o mod_nctools.o mod_prec.o mpi_constants.o
+
+# mod_force.F - depends on swmod1, mod_solar, mod_heatflux, mod_input, mod_par_special, mod_spherical, mod_utils, mod_ncll, mod_nctools, mod_time, mod_main, mod_interp, mod_prec
+mod_force.o: swmod1.o mod_solar.o mod_heatflux.o mod_input.o mod_par_special.o mod_spherical.o mod_utils.o mod_ncll.o mod_nctools.o mod_time.o mod_main.o mod_interp.o mod_prec.o
+
+# mod_obcs.F - depends on mod_spherical, mod_main, mod_par_special, mod_main, mod_force, mod_time, mod_utils, mod_prec
+mod_obcs.o: mod_spherical.o mod_main.o mod_par_special.o mod_main.o mod_force.o mod_time.o mod_utils.o mod_prec.o
+
+# mod_petsc.F - depends on mod_main, mod_par_special, mod_prec
+mod_petsc.o: mod_main.o mod_par_special.o mod_prec.o
+
+# cntrl_prmtrs.F - depends on mod_heatflux, mod_nesting, mod_ncdio, mod_time, mod_assim, mod_utils, mod_main, mod_prec, mpi_constants
+cntrl_prmtrs.o: mod_heatflux.o mod_nesting.o mod_ncdio.o mod_time.o mod_assim.o mod_utils.o mod_main.o mod_prec.o mpi_constants.o
+
+# mod_semi_implicit.F - depends on mod_par_special, mod_main, mod_prec
+mod_semi_implicit.o: mod_par_special.o mod_main.o mod_prec.o
+
+# mod_non_hydro.F - depends on mod_main, mod_prec
+mod_non_hydro.o: mod_main.o mod_prec.o
+
+# mod_set_time.F - depends on mod_main, mod_prec
+mod_set_time.o: mod_main.o mod_prec.o
+
+# ice_kinds_mod.F - depends on mod_prec
+ice_kinds_mod.o: mod_prec.o
+
+# ice_model_size.F - depends on mod_prec
+ice_model_size.o: mod_prec.o
+
+# ice_domain.F - depends on mod_prec
+ice_domain.o: mod_prec.o
+
+# ice_constants.F - depends on mod_prec
+ice_constants.o: mod_prec.o
+
+# ice_fileunits.F - depends on mod_prec
+ice_fileunits.o: mod_prec.o
+
+# ice_state.F - depends on mod_prec
+ice_state.o: mod_prec.o
+
+# ice_work.F - depends on mod_prec
+ice_work.o: mod_prec.o
+
+# ice_grid.F - depends on mod_prec
+ice_grid.o: mod_prec.o
+
+# ice_albedo.F - depends on mod_prec
+ice_albedo.o: mod_prec.o
+
+# ice_calendar.F - depends on mod_prec
+ice_calendar.o: mod_prec.o
+
+# ice_flux.F - depends on mod_prec
+ice_flux.o: mod_prec.o
+
+# ice_flux_in.F - depends on mod_prec
+ice_flux_in.o: mod_prec.o
+
+# ice_itd.F - depends on mod_prec
+ice_itd.o: mod_prec.o
+
+# ice_mechred.F - depends on mod_prec
+ice_mechred.o: mod_prec.o
+
+# ice_itd_linear.F - depends on mod_prec
+ice_itd_linear.o: mod_prec.o
+
+# ice_scaling.F - depends on mod_prec
+ice_scaling.o: mod_prec.o
+
+# ice_atmo.F - depends on mod_prec
+ice_atmo.o: mod_prec.o
+
+# ice_ocean.F - depends on mod_prec
+ice_ocean.o: mod_prec.o
+
+# ice_therm_vertical.F - depends on mod_prec
+ice_therm_vertical.o: mod_prec.o
+
+# ice_init.F - depends on mod_prec
+ice_init.o: mod_prec.o
+
+# ice_therm_itd.F - depends on mod_prec
+ice_therm_itd.o: mod_prec.o
+
+# mod_ice2d.F - depends on mod_prec
+mod_ice2d.o: mod_prec.o
+
+# mod_ice.F - depends on mod_prec
+mod_ice.o: mod_prec.o
+
+# mod_startup.F - depends on mod_main, mod_prec
+mod_startup.o: mod_main.o mod_prec.o
+
+# mod_wqm.F - depends on mod_main, mod_prec
+mod_wqm.o: mod_main.o mod_prec.o
+
+# mod_ncdio.F - depends on mod_main, mod_prec
+mod_ncdio.o: mod_main.o mod_prec.o
+
+# mod_setup.F - depends on mod_main, mod_prec
+mod_setup.o: mod_main.o mod_prec.o
+
+# mod_newinp.F - depends on mod_main, mod_prec
+mod_newinp.o: mod_main.o mod_prec.o
+
+# particle.F - depends on mod_main, mod_prec
+particle.o: mod_main.o mod_prec.o
+
+# linklist.F - depends on mod_main, mod_prec
+linklist.o: mod_main.o mod_prec.o
+
+# mod_lag.F - depends on mod_main, mod_prec
+mod_lag.o: mod_main.o mod_prec.o
+
+# mod_northpole.F - depends on mod_main, mod_prec
+mod_northpole.o: mod_main.o mod_prec.o
+
+# mod_pwp.F - depends on mod_main, mod_prec
+mod_pwp.o: mod_main.o mod_prec.o
+
+# mod_dye.F - depends on mod_main, mod_prec
+mod_dye.o: mod_main.o mod_prec.o
+
+# mod_optimal_interpolation.F - depends on mod_main, mod_prec
+mod_optimal_interpolation.o: mod_main.o mod_prec.o
+
+# mod_report.F - depends on mod_main, mod_prec
+mod_report.o: mod_main.o mod_prec.o
+
+# mod_probe.F - depends on mod_main, mod_prec
+mod_probe.o: mod_main.o mod_prec.o
+
+# mod_gotm.F - depends on mod_main, mod_prec
+mod_gotm.o: mod_main.o mod_prec.o
+
+# mod_balance_2d.F - depends on mod_main, mod_prec
+mod_balance_2d.o: mod_main.o mod_prec.o
+
+# mod_tridiag.F - depends on mod_main, mod_prec
+mod_tridiag.o: mod_main.o mod_prec.o
+
+# mod_scal.F - depends on mod_main, mod_prec
+mod_scal.o: mod_main.o mod_prec.o
+
+# mod_meanflow.F - depends on mod_main, mod_prec
+mod_meanflow.o: mod_main.o mod_prec.o
+
+# mod_obcs2.F - depends on mod_main, mod_prec
+mod_obcs2.o: mod_main.o mod_prec.o
+
+# mod_obcs3.F - depends on mod_main, mod_prec
+mod_obcs3.o: mod_main.o mod_prec.o
+
+# mod_sed.F - depends on mod_main, mod_prec
+mod_sed.o: mod_main.o mod_prec.o
+
+# mod_enkf.F - depends on mod_main, mod_prec
+mod_enkf.o: mod_main.o mod_prec.o
+
+# mod_etkf.F - depends on mod_main, mod_prec
+mod_etkf.o: mod_main.o mod_prec.o
+
+# mod_rrk.F - depends on mod_main, mod_prec
+mod_rrk.o: mod_main.o mod_prec.o
+
+# mod_rrkf_obs.F - depends on mod_main, mod_prec
+mod_rrkf_obs.o: mod_main.o mod_prec.o
+
+# mod_rrkassim.F - depends on mod_main, mod_prec
+mod_rrkassim.o: mod_main.o mod_prec.o
+
+# mod_enkf_ncd.F - depends on mod_main, mod_prec
+mod_enkf_ncd.o: mod_main.o mod_prec.o
+
+# enkf_ncdio.F - depends on mod_main, mod_prec
+enkf_ncdio.o: mod_main.o mod_prec.o
+
+# mod_enkf_obs.F - depends on mod_main, mod_prec
+mod_enkf_obs.o: mod_main.o mod_prec.o
+
+# mod_enkfassim.F - depends on mod_main, mod_prec
+mod_enkfassim.o: mod_main.o mod_prec.o
+
+# mod_assim.F - depends on mod_main, mod_prec
+mod_assim.o: mod_main.o mod_prec.o
+
+# mod_nesting.F - depends on mod_main, mod_prec
+mod_nesting.o: mod_main.o mod_prec.o
+
+# mod_visit.F - depends on mod_main, mod_par, mod_ncdio, mod_utils, mod_prec
+mod_visit.o: mod_main.o mod_par.o mod_ncdio.o mod_utils.o mod_prec.o
+
+# mod_plbc.F - depends on mod_main, mod_prec
+mod_plbc.o: mod_main.o mod_prec.o
+
+# mod_dam.F - depends on mod_main, mod_prec
+mod_dam.o: mod_main.o mod_prec.o
+
+# mod_station_timeseries.F - depends on mod_main, mod_prec
+mod_station_timeseries.o: mod_main.o mod_prec.o
+
+# mod_sparse_timeseries.F - depends on mod_main, mod_prec
+mod_sparse_timeseries.o: mod_main.o mod_prec.o
+
+# mod_boundschk.F - depends on mod_main, mod_prec
+mod_boundschk.o: mod_main.o mod_prec.o
+
+# mod_esmf_nesting.F - depends on mod_main, mod_prec
+mod_esmf_nesting.o: mod_main.o mod_prec.o
+
+# mod_cstms_vars.F - depends on mod_main, mod_prec
+mod_cstms_vars.o: mod_main.o mod_prec.o
+
+# mod_flocmod.F - depends on mod_main, mod_prec
+mod_flocmod.o: mod_main.o mod_prec.o
+
+# mod_sed_cstms.F - depends on mod_main, mod_prec
+mod_sed_cstms.o: mod_main.o mod_prec.o
+
+# mod_fluid_mud.F - depends on mod_main, mod_prec
+mod_fluid_mud.o: mod_main.o mod_prec.o
+
+# mod_tvd.F - depends on mod_main, mod_prec
+mod_tvd.o: mod_main.o mod_prec.o
+
+# mod_mld_rho.F - depends on mod_main, mod_prec
+mod_mld_rho.o: mod_main.o mod_prec.o
+
+# mod_heatflux_sediment.F - depends on mod_main, mod_prec
+mod_heatflux_sediment.o: mod_main.o mod_prec.o
+
+# mod_vector_projection.F - depends on mod_main, mod_prec
+mod_vector_projection.o: mod_main.o mod_prec.o 
 
 
 #--------------------------------------------------------------------------
