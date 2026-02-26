@@ -228,5 +228,6 @@ install.man::
 Makefiles::
 
 includes::
-include ./makedepends
+# Temporarily disable makedepends due to circular dependencies
+# include ./makedepends
 include ./make.inc
