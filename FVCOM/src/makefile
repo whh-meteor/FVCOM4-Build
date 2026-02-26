@@ -141,6 +141,7 @@ mod_nctools.o: mod_par.o
 
 # Ensure mod_types.o is built before modules that depend on it
 mod_par.o: mod_types.o
+mod_types.o: mod_prec.o
 
 # Ensure mod_nctools.o is built before modules that depend on it
 mod_input.o: mod_nctools.o 
