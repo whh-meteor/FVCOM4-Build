@@ -3111,7 +3111,6 @@ END SUBROUTINE GET_VALUE
 !==============================================================================|
 
    USE MOD_PREC
-   USE OCPCOMM4
    IMPLICIT NONE
    CHARACTER(LEN=*) :: FNAME,VNAME
    INTEGER, INTENT(INOUT), OPTIONAL :: ISCAL,IVEC(*)
@@ -3123,6 +3122,8 @@ END SUBROUTINE GET_VALUE
 !------------------------------------------------------------------------------|
 
    INTEGER :: SCAN_FILE2
+   INTEGER :: INPUTF
+   PARAMETER (INPUTF = 3)
    REAL(DP) REALVAL(150)
    INTEGER  INTVAL(150)
    CHARACTER(LEN=40 ) :: VARNAME
@@ -3307,7 +3308,6 @@ END SUBROUTINE GET_VALUE
 !==============================================================================|
 
    USE MOD_PREC
-   USE OCPCOMM4
    IMPLICIT NONE
    CHARACTER(LEN=*) :: FNAME,VNAME
    INTEGER, INTENT(INOUT), OPTIONAL :: ISCAL,IVEC(*)
@@ -3319,6 +3319,8 @@ END SUBROUTINE GET_VALUE
 !------------------------------------------------------------------------------|
 
    INTEGER :: SCAN_FILE3
+   INTEGER :: INPUTF
+   PARAMETER (INPUTF = 3)
    REAL(DP) REALVAL(150)
    INTEGER  INTVAL(150)
    CHARACTER(LEN=40 ) :: VARNAME
