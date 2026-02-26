@@ -32,6 +32,9 @@ include ./make.inc
             SHELL         = /bin/sh
             EXEC          = fvcom
 
+# Default target
+default: $(EXEC)
+
 #--------------------------------------------------------------------------
 #  Preprocessing and Compilation Directives
 #--------------------------------------------------------------------------
