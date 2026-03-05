@@ -90,6 +90,16 @@ jobs:
         ./configure.sh series
         # 检查make.inc是否生成
         ls -la ../FVCOM_source/
+        # 修改make.inc文件，添加TOPDIR和NETCDF路径
+        cd ../FVCOM_source
+        echo "           TOPDIR        = $(pwd)" > make.inc.tmp
+        cat make.inc >> make.inc.tmp
+        mv make.inc.tmp make.inc
+        # 设置NETCDF库路径
+        sed -i 's|IOLIBS       =  -lnetcdf|IOLIBS       =  -L'"$NETCDF"'/lib -lnetcdf|g' make.inc
+        sed -i 's|IOINCS       =  #|IOINCS       =  -I'"$NETCDF"'/include|g' make.inc
+        # 检查修改后的make.inc文件
+        cat make.inc | grep -E "TOPDIR|IOLIBS|IOINCS"
     
     # 编译FVCOM（按照文档步骤）
     - name: Build FVCOM
