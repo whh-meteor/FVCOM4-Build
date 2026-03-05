@@ -1,113 +1,123 @@
-name: FVCOM_Windows_Final_Stable
+name: FVCOM4.1 Build and Test
 
 on:
   push:
-  workflow_dispatch:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
 jobs:
   build:
-    runs-on: windows-latest
-
+    runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          path-type: minimal
-          update: true
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-gcc-fortran
-            mingw-w64-x86_64-make
-            mingw-w64-x86_64-netcdf
-            mingw-w64-x86_64-netcdf-fortran
-            mingw-w64-x86_64-metis
-            mingw-w64-x86_64-pkgconf
-            make
-
-      - name: Build FVCOM
-        shell: msys2 {0}
-        run: |
-          set -e
-
-          echo "===== ENV CHECK ====="
-          echo "MSYSTEM=$MSYSTEM"
-          which gfortran
-
-          cd "$GITHUB_WORKSPACE/FVCOM/src"
-
-          echo "===== WRITE make.inc ====="
-
-          cat > make.inc <<'EOF'
-          FC = gfortran
-          CC = gcc
-          RM = rm -f
-
-          FFLAGS = -O3 -cpp -fallow-argument-mismatch -ffree-line-length-none -fno-range-check
-          CFLAGS = -O3
-
-          CPPARGS = -DGFORTRAN -DDOUBLE_PRECISION -DWET_DRY -DMETIS_5
-
-          INCS = -I./libs/julian -I/mingw64/include
-          LIBS = -L./libs/julian -ljulian -L/mingw64/lib -lmetis -lnetcdff -lnetcdf
-          EOF
-
-          cat make.inc
-
-          make clean || true
-
-          echo "===== RECREATE mpi_constants.f90 (deleted by make clean) ====="
-          cat > mpi_constants.f90 <<'EOF'
-          module mpi_constants
-            implicit none
-            
-            integer, parameter :: MPI_SUCCESS = 0
-            integer, parameter :: MPI_COMM_WORLD = 0
-            integer, parameter :: MPI_LOGICAL = 0
-            integer, parameter :: MPI_INTEGER = 0
-            integer, parameter :: MPI_DOUBLE_PRECISION = 0
-            integer, parameter :: MPI_SUM = 0
-            integer, parameter :: MPI_MAX = 0
-            integer, parameter :: MPI_MIN = 0
-            integer, parameter :: MPI_BCAST = 0
-            integer, parameter :: MPI_COMM_RANK = 0
-            integer, parameter :: MPI_COMM_SIZE = 0
-            integer, parameter :: MPI_ABORT = 0
-            integer, parameter :: MPI_FINALIZE = 0
-            integer, parameter :: MPI_INIT = 0
-            integer, parameter :: MPI_STATUS_IGNORE = 0
-            integer, parameter :: MPI_STATUSES_IGNORE = 0
-            integer, parameter :: MPI_ANY_SOURCE = 0
-            integer, parameter :: MPI_ANY_TAG = 0
-            integer, parameter :: MPI_UNDEFINED = 0
-            integer, parameter :: MPI_ROOT = 0
-            
-          end module mpi_constants
-          EOF
-
-          make
-
-          ls -lh fvcom.exe
-
-      - name: Package
-        shell: msys2 {0}
-        run: |
-          mkdir -p publish
-          cp FVCOM/src/fvcom.exe publish/
-
-          cp /mingw64/bin/libgfortran-*.dll publish/ || true
-          cp /mingw64/bin/libquadmath-*.dll publish/ || true
-          cp /mingw64/bin/libgcc_s_seh-*.dll publish/ || true
-          cp /mingw64/bin/libwinpthread-*.dll publish/ || true
-          cp /mingw64/bin/libnetcdf-*.dll publish/ || true
-          cp /mingw64/bin/libnetcdff-*.dll publish/ || true
-          cp /mingw64/bin/libmetis-*.dll publish/ || true
-
-      - name: Upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: FVCOM-Windows
-          path: publish/
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential gfortran libcurl4-openssl-dev wget tar zlib1g-dev
+    
+    - name: Create installation directory
+      run: |
+        mkdir -p $HOME/opt
+    
+    # 安装HDF5（按照文档步骤）
+    - name: Install HDF5
+      run: |
+        cd $HOME
+        wget https://support.hdfgroup.org/ftp/HDF5/releases/hdf5-1.10/hdf5-1.10.7/src/hdf5-1.10.7.tar.gz
+        tar -zxf hdf5-1.10.7.tar.gz
+        cd hdf5-1.10.7
+        ./configure --prefix=$HOME/opt/hdf5 --enable-fortran --enable-shared
+        make -j4
+        make install
+    
+    # 设置HDF5环境变量
+    - name: Set HDF5 environment variables
+      run: |
+        echo "export HDF5_HOME=$HOME/opt/hdf5" >> $GITHUB_ENV
+        echo "export PATH=$HOME/opt/hdf5/bin:$PATH" >> $GITHUB_ENV
+        echo "export LD_LIBRARY_PATH=$HOME/opt/hdf5/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+    
+    # 安装NETCDF-C（按照文档步骤）
+    - name: Install NETCDF-C
+      run: |
+        cd $HOME
+        wget https://downloads.unidata.ucar.edu/netcdf-c/4.8.1/netcdf-c-4.8.1.tar.gz
+        tar -zxf netcdf-c-4.8.1.tar.gz
+        cd netcdf-c-4.8.1
+        export CC=gcc
+        export CXX=g++
+        export CPPFLAGS="-I$HOME/opt/hdf5/include"
+        export LDFLAGS="-L$HOME/opt/hdf5/lib"
+        ./configure --prefix=$HOME/opt/netcdf --enable-shared
+        make -j4
+        make install
+    
+    # 设置NETCDF-C环境变量
+    - name: Set NETCDF-C environment variables
+      run: |
+        echo "export NETCDF_HOME=$HOME/opt/netcdf" >> $GITHUB_ENV
+        echo "export PATH=$HOME/opt/netcdf/bin:$PATH" >> $GITHUB_ENV
+        echo "export LD_LIBRARY_PATH=$HOME/opt/netcdf/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+    
+    # 安装NETCDF-Fortran（按照文档步骤）
+    - name: Install NETCDF-Fortran
+      run: |
+        cd $HOME
+        wget https://downloads.unidata.ucar.edu/netcdf-fortran/4.5.3/netcdf-fortran-4.5.3.tar.gz
+        tar -zxf netcdf-fortran-4.5.3.tar.gz
+        cd netcdf-fortran-4.5.3
+        export CC=gcc
+        export FC=gfortran
+        export CPPFLAGS="-I$HOME/opt/netcdf/include"
+        export LDFLAGS="-L$HOME/opt/netcdf/lib"
+        ./configure --prefix=$HOME/opt/netcdf --enable-shared
+        make -j4
+        make install
+    
+    # 配置FVCOM（按照文档步骤）
+    - name: Configure FVCOM
+      run: |
+        cd FVCOM4.1/Configure
+        export NETCDF=$HOME/opt/netcdf
+        ./configure.sh --arch=Linux_x86_64_cc_gfortran --netcdf=$NETCDF
+    
+    # 编译FVCOM（按照文档步骤）
+    - name: Build FVCOM
+      run: |
+        cd FVCOM4.1/FVCOM_source
+        make clean
+        make -j4
+    
+    # 测试Estuary算例（按照文档步骤）
+    - name: Test Estuary example
+      run: |
+        cd FVCOM4.1/Examples/Estuary
+        cp make.inc_example make.inc
+        cd run
+        ln -sf ../../FVCOM_source/fvcom .
+        ./fvcom
+    
+    # 测试Inlet算例（按照文档步骤）
+    - name: Test Inlet example
+      run: |
+        cd FVCOM4.1/Examples/Inlets
+        cp make.inc_example make.inc
+        cd run
+        ln -sf ../../FVCOM_source/fvcom .
+        ./fvcom
+    
+    # 上传编译后的文件作为构件
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: fvcom-build
+        path: |
+          FVCOM4.1/FVCOM_source/fvcom
+          FVCOM4.1/Examples/Estuary/run/
+          FVCOM4.1/Examples/Inlets/run/
