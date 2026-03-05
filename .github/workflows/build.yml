@@ -84,6 +84,7 @@ jobs:
     - name: Configure FVCOM
       run: |
         cd FVCOM4.1/Configure
+        chmod +x configure.sh
         export NETCDF=$HOME/opt/netcdf
         ./configure.sh --arch=Linux_x86_64_cc_gfortran --netcdf=$NETCDF
     
