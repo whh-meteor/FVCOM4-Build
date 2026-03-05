@@ -1,0 +1,53 @@
+# 编译生成的文件
+*.o
+*.mod
+*.a
+*.so
+*.dylib
+fvcom
+
+# 临时文件
+*.tmp
+*.temp
+*~ 
+
+# 日志文件
+*.log
+*.out
+
+# 大型数据文件
+*.nc
+*.dat
+*.bin
+
+# CVS版本控制目录
+CVS/
+
+# 备份文件
+*.bak
+*.old
+
+# 环境相关文件
+.make.inc*
+make.inc
+
+# 压缩文件
+*.tar.gz
+*.tgz
+
+# 算例运行输出
+Examples/*/run/*.nc
+Examples/*/run/*.dat
+Examples/*/run/*.log
+Examples/*/OUTDIR/
+
+# 安装相关
+local/
+hdf5-*/
+netcdf-*/
+
+# IDE相关
+.vscode/
+.idea/
+*.swp
+*.swo
