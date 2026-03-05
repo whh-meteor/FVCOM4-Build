@@ -83,24 +83,113 @@ jobs:
     # 配置FVCOM（按照文档步骤）
     - name: Configure FVCOM
       run: |
-        cd FVCOM4.1/Configure
-        chmod +x configure.sh
-        export NETCDF=$HOME/opt/netcdf
-        # 运行configure.sh生成make.inc文件
-        ./configure.sh series
-        # 检查make.inc是否生成
-        ls -la ../FVCOM_source/
-        # 修改make.inc文件，添加TOPDIR和NETCDF路径
-        cd ../FVCOM_source
-        echo "           TOPDIR        = $(pwd)" > make.inc.tmp
-        cat make.inc >> make.inc.tmp
-        mv make.inc.tmp make.inc
-        # 设置NETCDF库路径
-        sed -i 's|IOLIBS       =  -lnetcdf|IOLIBS       =  -L'"$NETCDF"'/lib -lnetcdf|g' make.inc
-        sed -i 's|IOINCS       =  #|IOINCS       =  -I'"$NETCDF"'/include|g' make.inc
+        cd FVCOM4.1
+        # 复制make.inc_example文件
+        cp Examples/Estuary/make.inc_example FVCOM_source/make.inc
+        # 创建软链接
+        ln -sf FVCOM_source/make.inc ./
+        # 修改make.inc文件
+        cd FVCOM_source
+        # 设置TOPDIR
+        sed -i 's|TOPDIR        = |TOPDIR        = $(pwd)|g' make.inc
+        # 设置LIBDIR和INCDIR
+        sed -i 's|LIBDIR       =  -L$(subst $(colon),$(dashL),$(LIBPATH))|LIBDIR       = -L$(INSTALLDIR)/lib -L../METIS_source/metis -L./libs/julian|g' make.inc
+        sed -i 's|INCDIR       =  -I$(subst $(colon),$(dashI),$(INCLUDEPATH))|INCDIR       = -I$(INSTALLDIR)/include -I../METIS_source/metis -I./libs/julian|g' make.inc
+        # 设置NETCDF和HDF5路径
+        sed -i 's|IOLIBS       =  -lnetcdf|IOLIBS       = -L'"$HOME/opt/netcdf"'/lib -L'"$HOME/opt/hdf5"'/lib -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz -lcurl -lm|g' make.inc
+        sed -i 's|IOINCS       =  #|IOINCS       = -I'"$HOME/opt/netcdf"'/include -I'"$HOME/opt/hdf5"'/include|g' make.inc
+        # 设置gfortran编译选项
+        sed -i '/#  Intel\/MPI Compiler Definitions (SMAST)/,/#  gfortran defs/ s/^/#/' make.inc
+        sed -i '/#  gfortran defs/,/#--------------------------------------------------------------------------/ s/^#//' make.inc
+        sed -i 's|FC       = gfortran  -O3|FC       = mpif90|g' make.inc
+        sed -i 's|OPT      =|OPT      = -O3 -ffixed-line-length-none -ffree-form -ffree-line-length-none|g' make.inc
+        sed -i '/FC       = mpif90/a           CC       = mpicc
+           CXX      = mpicxx' make.inc
         # 检查修改后的make.inc文件
-        cat make.inc | grep -E "TOPDIR|IOLIBS|IOINCS"
+        cat make.inc | grep -E "TOPDIR|LIBDIR|INCDIR|IOLIBS|IOINCS|COMPILER|FC|OPT"
     
+    # 安装OpenMPI
+    - name: Install OpenMPI
+      run: |
+        sudo apt-get install -y openmpi-bin openmpi-common libopenmpi-dev
+    
+    # 编译METIS库（按照文档步骤）
+    - name: Build METIS library
+      run: |
+        cd FVCOM4.1
+        # 创建METIS_source目录
+        mkdir -p METIS_source
+        cd METIS_source
+        # 复制metis.tgz文件
+        cp ../FVCOM_source/libs/metis.tgz ./
+        # 解压
+        tar -zxf metis.tgz
+        # 进入metis目录
+        cd metis
+        # 创建安装目录
+        mkdir -p ../../FVCOM_source/libs/install/lib
+        mkdir -p ../../FVCOM_source/libs/install/include
+        mkdir -p ../../FVCOM_source/libs/install/bin
+        # 编译安装
+        make -j
+        make install
+    
+    # 编译julian库（按照文档步骤）
+    - name: Build julian library
+      run: |
+        cd FVCOM4.1/FVCOM_source/libs
+        # 解压julian.tgz
+        tar -zxf julian.tgz
+        # 进入julian目录
+        cd julian
+        # 编译安装
+        make -j
+        make install
+    
+    # 修改mod_newinp.F文件（按照文档步骤）
+    - name: Modify mod_newinp.F
+      run: |
+        cd FVCOM4.1/FVCOM_source
+        # 备份原始文件
+        cp mod_newinp.F mod_newinp.F.bak
+        # 添加N_Fmt函数
+        sed -i '/contains/i !----------------------------------------
+      ! functions
+      !----------------------------------------
+      ' mod_newinp.F
+              sed -i '/contains/a   Character( Len = 256 ) Function N_Fmt( c , n )
+          Character( Len = * ) , Intent( IN ) :: c
+          Integer , Intent( IN ) :: n
+          integer :: i , j
+          character( len = 16 ) :: cn
+          i = index( c , '<' )
+          j = index( c , '>' )
+          write( cn , '(g0)' ) n
+          N_Fmt = c(:i-1) // Trim(adjustL(cn)) // c(j+1:)
+        End Function N_Fmt
+      ' mod_newinp.F
+              # 修改第352行附近的write语句
+              sed -i 's/write(\*,\'(A20,<size>F10.4)\')trim(argname)//\': \',fval(1:SIZE)/write(\*,N_Fmt(\'(A20,<size>F10.4)\',SIZE))trim(argname)//\': \',fval(1:SIZE)/g' mod_newinp.F
+              # 修改第421行附近的write语句
+              sed -i 's/write(\*,\'(A20,<size>I10)\')trim(argname)//\': \',ival(1:SIZE)/write(\*,N_Fmt(\'(A20,<size>I10)\',SIZE))trim(argname)//\': \',ival(1:SIZE)/g' mod_newinp.F
+              # 修改第494行附近的write语句
+              sed -i 's/write(\*,\'(A20,<size>L10)\')trim(argname)//\': \',cval(1:SIZE)/write(\*,N_Fmt(\'(A20,<size>L10)\',SIZE))trim(argname)//\': \',cval(1:SIZE)/g' mod_newinp.F
+              # 修改第567行附近的write语句
+              sed -i 's/write(\*,\'(A20,<size>A10)\')trim(argname)//\': \',sval(1:SIZE)/write(\*,N_Fmt(\'(A20,<size>A10)\',SIZE))trim(argname)//\': \',sval(1:SIZE)/g' mod_newinp.F
+          
+        # 修改其他文件（按照文档步骤）
+        - name: Modify other files
+          run: |
+            cd FVCOM4.1/FVCOM_source
+            # 修改mod_scal.F
+            sed -i 's/\/=\.TRUE\./\.neqv\.\.TRUE\./g' mod_scal.F
+            # 修改internal_step.F
+            sed -i 's/==\.TRUE/\.eqv\.\.TRUE/g' internal_step.F
+            # 修改adv_t.F
+            sed -i 's/==\.FALSE\./\.eqv\.\.FALSE\./g' adv_t.F
+            # 修改adv_s.F
+            sed -i 's/==\.FALSE\./\.eqv\.\.FALSE\./g' adv_s.F
+        
     # 编译FVCOM（按照文档步骤）
     - name: Build FVCOM
       run: |
